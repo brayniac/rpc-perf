@@ -102,17 +102,21 @@ pub use crate::value::MetricValue;
 use crate::state::{State, MetricInner};
 
 pub enum RegisterError {
+    // A metric has already been registered under that name
     MetricAlreadyExists,
+    // The metric library has been shut down.
     LibraryShutdown
 }
 pub enum UnregisterError {
+    // There is no metric with that name to remove
     NoSuchMetric,
     LibraryShutdown
 }
 
-/// Register a new counter under the given name.
+/// Register a new counter.
 /// 
-/// 
+/// If a metric has already been registered under the
+/// same name, then it will return an error.
 pub fn register_counter(
     name: impl Into<Cow<'static, str>>,
     counter: impl Into<DynCow<'static, dyn Counter + Send + Sync>>,
@@ -125,6 +129,10 @@ pub fn register_counter(
     )
 }
 
+/// Register a new gauge.
+/// 
+/// If a metric has already been registered under the
+/// same name, then it will return an error.
 pub fn register_gauge(
     name: impl Into<Cow<'static, str>>,
     gauge: impl Into<DynCow<'static, dyn Gauge + Send + Sync>>,
@@ -137,6 +145,10 @@ pub fn register_gauge(
     )
 }
 
+/// Register a new histogram.
+/// 
+/// If a metric has already been registered under the
+/// same name, then it will return an error.
 pub fn register_histogram(
     name: impl Into<Cow<'static, str>>,
     histogram: impl Into<DynCow<'static, dyn Histogram + Send + Sync>>,
@@ -149,10 +161,14 @@ pub fn register_histogram(
     )
 }
 
+/// Unregister an existing metric.
+/// 
+/// If there is no such metric 
 pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
     State::get().unregister_metric(name.as_ref())
 }
 
+#[inline]
 pub fn record_value(
     name: impl AsRef<str>,
     value: impl Into<MetricValue>,

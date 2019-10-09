@@ -124,7 +124,7 @@ impl State {
                 match &inner.metric {
                     MetricInner::Counter(counter) => {
                         if let Some(val) = value.as_u64() {
-                            counter.record_value(time, val);
+                            counter.store(time, val);
                         } else {
                             // TODO: How to do error handling?
                             warn!("Tried record an invalid value to a counter");
@@ -132,7 +132,7 @@ impl State {
                     }
                     MetricInner::Gauge(gauge) => {
                         if let Some(val) = value.as_i64() {
-                            gauge.record_value(time, val);
+                            gauge.store(time, val);
                         } else {
                             // TODO: error handling?
                             warn!("Tried to record an invalid value to a gauge");
@@ -140,7 +140,7 @@ impl State {
                     }
                     MetricInner::Histogram(histogram) => {
                         if let Some(val) = value.as_u64() {
-                            histogram.record_values(time, val, count);
+                            histogram.increment(time, val, count);
                         } else {
                             // TODO: error handling?
                             warn!("Tried to record a negative invalid value to a histogram");
