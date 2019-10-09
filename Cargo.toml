@@ -4,6 +4,7 @@ members = [
     "buffer",
     "codec",
     "datastructures",
+    "facade",
     "logger",
     "metrics",
     "ratelimiter",
