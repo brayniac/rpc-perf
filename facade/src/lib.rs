@@ -4,23 +4,23 @@
 
 //! Metrics facade that allows for using multiple metrics
 //! backends.
-//! 
+//!
 //! Metrics types should implement one of [`Counter`][counter],
 //! [`Gauge`][gauge], or [`Histogram`][histogram]. Then they
-//! can be registered through one of [`register_counter`][rctr], 
+//! can be registered through one of [`register_counter`][rctr],
 //! [`register_gauge`][rgauge], or [`register_histogram`][rhist]
 //! functions.
-//! 
+//!
 //! # Metadata
 //! Each individual metric can have metadata associated with.
 //! This is a set of static key-value pairs that can be used
 //! to store arbitrary properties of the metric. Empty metadata
 //! can be created by calling [`Metadata::new`](facade::Metadata::new).
 //! Otherwise, `Metadata` is created using the `metadata` macro.
-//! 
+//!
 //! # Introspection
 //! TODO
-//! 
+//!
 //! # Example
 //! ```rust
 //! # use facade::*;
@@ -32,7 +32,7 @@
 //! # fn function_that_takes_some_time() {}
 //! // Create a metric named "example.metric" with no associated metadata
 //! register_histogram("example.metric", Box::new(Metric), Metadata::empty());
-//! 
+//!
 //! // Alternatively, we can add metadata using the metadata! macro.
 //! register_histogram(
 //!     "example.metadata",
@@ -42,7 +42,7 @@
 //!         "unit" => "ns"
 //!     }
 //! );
-//! 
+//!
 //! // If you have a static reference to a metric, then you can avoid boxing it
 //! static METRIC_INSTANCE: Metric = Metric;
 //! register_histogram(
@@ -50,17 +50,17 @@
 //!     &METRIC_INSTANCE,
 //!     Metadata::empty()
 //! );
-//! 
+//!
 //! // Now we can use these metrics like so
-//! 
+//!
 //! // Record single values to "example.metric"
 //! value!("example.metric", 10);
 //! value!("example.metric", 11);
-//! 
+//!
 //! // Record a value and a count, note that the count
 //! // is only used by histograms.
 //! value!("example.static", 120, 44);
-//! 
+//!
 //! // Can also record timings
 //! let start = current_time();
 //! function_that_takes_some_time();
@@ -68,15 +68,13 @@
 //! // This gets translated to a duration in nanoseconds
 //! timing!("example.metadata", start, end);
 //! ```
-//! 
+//!
 //! [counter]: facade::Counter
 //! [gauge]: facade::Gauge
 //! [histogram]: facade::Histogram
 //! [rctr]: facade::register_counter
 //! [rgauge]: facade::register_gauge
 //! [rhist]: facade::register_histogram
-
-#![allow(unused_variables)]
 
 #[macro_use]
 extern crate log;
@@ -86,35 +84,35 @@ mod macros;
 
 mod dyncow;
 mod metadata;
-mod traits;
 mod percentile;
 mod state;
+mod traits;
 mod value;
 
 use std::borrow::Cow;
 
 pub use crate::dyncow::DynCow;
 pub use crate::metadata::Metadata;
-pub use crate::traits::{Counter, Gauge, Histogram, Instant, Interval, Metric};
 pub use crate::percentile::Percentile;
+pub use crate::traits::{Counter, Gauge, Histogram, Instant, Interval, Metric};
 pub use crate::value::MetricValue;
 
-use crate::state::{State, MetricInner};
+use crate::state::{MetricInner, State};
 
 pub enum RegisterError {
     // A metric has already been registered under that name
     MetricAlreadyExists,
     // The metric library has been shut down.
-    LibraryShutdown
+    LibraryShutdown,
 }
 pub enum UnregisterError {
     // There is no metric with that name to remove
     NoSuchMetric,
-    LibraryShutdown
+    LibraryShutdown,
 }
 
 /// Register a new counter.
-/// 
+///
 /// If a metric has already been registered under the
 /// same name, then it will return an error.
 pub fn register_counter(
@@ -122,15 +120,11 @@ pub fn register_counter(
     counter: impl Into<DynCow<'static, dyn Counter + Send + Sync>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get().register_metric(
-        name.into(),
-        MetricInner::Counter(counter.into()),
-        metadata
-    )
+    State::get().register_metric(name.into(), MetricInner::Counter(counter.into()), metadata)
 }
 
 /// Register a new gauge.
-/// 
+///
 /// If a metric has already been registered under the
 /// same name, then it will return an error.
 pub fn register_gauge(
@@ -138,15 +132,11 @@ pub fn register_gauge(
     gauge: impl Into<DynCow<'static, dyn Gauge + Send + Sync>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get().register_metric(
-        name.into(),
-        MetricInner::Gauge(gauge.into()),
-        metadata
-    )
+    State::get().register_metric(name.into(), MetricInner::Gauge(gauge.into()), metadata)
 }
 
 /// Register a new histogram.
-/// 
+///
 /// If a metric has already been registered under the
 /// same name, then it will return an error.
 pub fn register_histogram(
@@ -157,29 +147,26 @@ pub fn register_histogram(
     State::get().register_metric(
         name.into(),
         MetricInner::Histogram(histogram.into()),
-        metadata
+        metadata,
     )
 }
 
 /// Unregister an existing metric.
-/// 
-/// If there is no such metric 
+///
+/// If there is no such metric returns an error.
 pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
     State::get().unregister_metric(name.as_ref())
 }
 
+/// Record a value to a metric. This corresponds to the `value!` macro.
 #[inline]
 pub fn record_value(
     name: impl AsRef<str>,
     value: impl Into<MetricValue>,
     count: impl Into<u64>,
-    time: Instant
+    time: Instant,
 ) {
-    let name = name.as_ref();
-    let value = value.into();
-    let count = count.into();
-
-    State::get().record_value(name, value, count, time);
+    State::get().record_value(name.as_ref(), value.into(), count.into(), time);
 }
 
 #[doc(hidden)]
