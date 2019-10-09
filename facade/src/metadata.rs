@@ -51,6 +51,12 @@ impl Index<&'_ str> for Metadata {
     }
 }
 
+impl Default for Metadata {
+    fn default() -> Self {
+        Metadata::empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
