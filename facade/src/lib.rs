@@ -20,6 +20,16 @@
 //!
 //! # Introspection
 //! TODO
+//! 
+//! # Error Handling
+//! This library has a somewhat idiosyncratic approach to error handling.
+//! Instead of returning a result from each metric function/macro there 
+//! is a global error handling function (set by 
+//! [`set_error_fn`](facade::set_error_fn)) which is called with the error
+//! whenever an invalid action is performed. 
+//! 
+//! **Important Note:** attempting to record values to a non-existant metric
+//! is not considered an error for performance reasons. 
 //!
 //! # Example
 //! ```rust
@@ -88,6 +98,7 @@ mod error;
 mod instant;
 mod metadata;
 mod percentile;
+mod scoped;
 mod state;
 mod traits;
 mod value;
@@ -96,18 +107,30 @@ use std::borrow::Cow;
 
 pub use crate::dyncow::DynCow;
 pub use crate::error::{MetricError, RegisterError, UnregisterError};
-pub use crate::instant::{AsNanoseconds, Instant, Interval};
+pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
 pub use crate::percentile::Percentile;
 pub use crate::traits::{Counter, Gauge, Histogram, Metric};
 pub use crate::value::MetricValue;
+pub use crate::scoped::ScopedMetric;
 
 use crate::state::{MetricInner, State};
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MetricType {
     Counter,
     Gauge,
-    Histogram
+    Histogram,
+}
+
+impl std::fmt::Display for MetricType {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Counter => write!(fmt, "counter"),
+            Self::Gauge => write!(fmt, "gauge"),
+            Self::Histogram => write!(fmt, "histogram")
+        }
+    }
 }
 
 /// Register a new counter.
@@ -116,7 +139,7 @@ pub enum MetricType {
 /// same name, then it will return an error.
 pub fn register_counter(
     name: impl Into<Cow<'static, str>>,
-    counter: impl Into<DynCow<'static, dyn Counter + Send + Sync>>,
+    counter: impl Into<DynCow<'static, dyn Counter>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
     State::get_force().register_metric(name.into(), MetricInner::Counter(counter.into()), metadata)
@@ -128,7 +151,7 @@ pub fn register_counter(
 /// same name, then it will return an error.
 pub fn register_gauge(
     name: impl Into<Cow<'static, str>>,
-    gauge: impl Into<DynCow<'static, dyn Gauge + Send + Sync>>,
+    gauge: impl Into<DynCow<'static, dyn Gauge>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
     State::get_force().register_metric(name.into(), MetricInner::Gauge(gauge.into()), metadata)
@@ -140,7 +163,7 @@ pub fn register_gauge(
 /// same name, then it will return an error.
 pub fn register_histogram(
     name: impl Into<Cow<'static, str>>,
-    histogram: impl Into<DynCow<'static, dyn Histogram + Send + Sync>>,
+    histogram: impl Into<DynCow<'static, dyn Histogram>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
     State::get_force().register_metric(
@@ -165,14 +188,16 @@ pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
 pub fn record_value(
     name: impl AsRef<str>,
     value: impl Into<MetricValue>,
-    count: impl Into<u64>,
+    count: u64,
     time: Instant,
 ) {
     if let Some(state) = State::get() {
-        state.record_value(name.as_ref(), value.into(), count.into(), time);
+        state.record_value(name.as_ref(), value.into(), count, time);
     }
 }
 
+/// Record an increment to a counter or gauge. This corresponds
+/// to the `increment!` macro.
 #[inline]
 pub fn record_increment(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
     if let Some(state) = State::get() {
@@ -180,6 +205,8 @@ pub fn record_increment(name: impl AsRef<str>, amount: impl Into<MetricValue>, t
     }
 }
 
+/// Record a decrement to a gauge. This corresponds to the
+/// `decrement!` macro.
 #[inline]
 pub fn record_decrement(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
     if let Some(state) = State::get() {
@@ -187,18 +214,36 @@ pub fn record_decrement(name: impl AsRef<str>, amount: impl Into<MetricValue>, t
     }
 }
 
+/// Record a value, calls the error function if the metric is 
+/// not a counter.
 #[inline]
-pub fn record_counter_value(name: impl AsRef<str>, amount: impl Into<u64>, time: Instant) {
+pub fn record_counter_value(name: impl AsRef<str>, amount: u64, time: Instant) {
     if let Some(state) = State::get() {
-        state.record_counter_value(name.as_ref(), amount.into(), time);
+        state.record_counter_value(name.as_ref(), amount, time);
     }
 }
 
+/// Record a value, calls the error function if the metric is
+/// not a gauge.
 #[inline]
-pub fn record_gauge_value(name: impl AsRef<str>, amount: impl Into<i64>, time: Instant) {
+pub fn record_gauge_value(name: impl AsRef<str>, amount: i64, time: Instant) {
     if let Some(state) = State::get() {
-        state.record_gauge_value(name.as_ref(), amount.into(), time);
+        state.record_gauge_value(name.as_ref(), amount, time);
     }
+}
+
+/// Set the error function.
+/// 
+/// Due to the impracticality of having every single metric
+/// return a `Result` this library instead opts to have an
+/// internal error function that is called whenever an error
+/// occurs.
+/// 
+/// The default error function will log a warning when 
+pub fn set_error_fn(err_fn: impl Fn(MetricError) + Send + Sync + 'static) {
+    use std::sync::Arc;
+
+    State::get_force().set_error_fn(Arc::new(err_fn));
 }
 
 #[doc(hidden)]
@@ -210,6 +255,6 @@ pub mod export {
     }
 
     pub fn current_time() -> Instant {
-        unimplemented!()
+        Instant::now()
     }
 }

@@ -19,11 +19,11 @@ macro_rules! value {
     ($name:literal, $value:expr) => {
         value!($name, $value, 1)
     };
-    ($name:literal, $value:expr, $count:expr) => {
-        value!($name, $value, $count, time = $crate::export::current_time())
-    };
     ($name:literal, $value:expr, time = $time:expr) => {
         value!($name, $value, 1, time = $time)
+    };
+    ($name:literal, $value:expr, $count:expr) => {
+        value!($name, $value, $count, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, $count:expr, time=$time:expr) => {
         $crate::record_value(
@@ -58,7 +58,7 @@ macro_rules! increment {
         increment!($name, $value, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        unimplemented!()
+        $crate::record_increment($name, $value, $time)
     };
 }
 
@@ -85,7 +85,7 @@ macro_rules! decrement {
         decrement!($name, $value, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        unimplemented!()
+        $crate::record_decrement($name, $value, $time)
     }
 }
 

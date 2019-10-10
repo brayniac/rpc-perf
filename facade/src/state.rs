@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Mutex,
+    Mutex, Arc
 };
 
 use evmap::{self, ShallowCopy};
@@ -15,9 +15,9 @@ use crate::{
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum MetricInner {
-    Counter(DynCow<'static, dyn Counter + Send + Sync>),
-    Gauge(DynCow<'static, dyn Gauge + Send + Sync>),
-    Histogram(DynCow<'static, dyn Histogram + Send + Sync>),
+    Counter(DynCow<'static, dyn Counter>),
+    Gauge(DynCow<'static, dyn Gauge>),
+    Histogram(DynCow<'static, dyn Histogram>),
 }
 
 impl MetricInner {
@@ -36,9 +36,26 @@ pub(crate) struct MetricInstance {
     metadata: Metadata,
 }
 
-type WriteHandle = evmap::WriteHandle<Cow<'static, str>, MetricInstance>;
-type ReadHandle = evmap::ReadHandle<Cow<'static, str>, MetricInstance>;
-type ReadHandleFactory = evmap::ReadHandleFactory<Cow<'static, str>, MetricInstance>;
+#[derive(Clone)]
+pub(crate) struct GlobalMetadata {
+    error_fn: Arc<dyn Fn(MetricError) + Send + Sync>
+}
+
+impl Default for GlobalMetadata {
+    fn default() -> Self {
+        Self {
+            error_fn: Arc::new(default_error_fn)
+        }
+    }
+}
+
+fn default_error_fn(_err: MetricError) {
+    warn!("An error occurred :(");
+}
+
+type WriteHandle = evmap::WriteHandle<Cow<'static, str>, MetricInstance, GlobalMetadata>;
+type ReadHandle = evmap::ReadHandle<Cow<'static, str>, MetricInstance, GlobalMetadata>;
+type ReadHandleFactory = evmap::ReadHandleFactory<Cow<'static, str>, MetricInstance, GlobalMetadata>;
 
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 static STATE: Lazy<State> = Lazy::new(|| {
@@ -54,7 +71,7 @@ pub(crate) struct State {
 
 impl State {
     fn new() -> Self {
-        let (reader, writer) = evmap::new();
+        let (reader, writer) = evmap::with_meta(GlobalMetadata::default());
 
         Self {
             writer: Mutex::new(writer),
@@ -67,7 +84,7 @@ impl State {
         self.tls.get_or(|| self.factory.handle())
     }
 
-    #[inline]
+    //#[inline]
     pub(crate) fn get() -> Option<&'static Self> {
         if INITIALIZED.load(Ordering::Relaxed) {
             Some(&*STATE)
@@ -132,36 +149,41 @@ impl State {
         Ok(())
     }
 
+    pub(crate) fn set_error_fn(&self, err_fn: Arc<dyn Fn(MetricError) + Send + Sync>) {
+        let mut writer = self.writer.lock().unwrap();
+
+        let mut meta = writer.meta().unwrap();
+        meta.error_fn = err_fn;
+        writer.set_meta(meta);
+
+        writer.refresh();
+    }
+
     #[cold]
     fn error(&self, err: MetricError) {
-        unimplemented!()
+        let reader = self.reader();
+
+        if let Some(meta) = reader.meta() {
+            (*meta.error_fn)(err);
+        }
     }
 
     pub(crate) fn record_value(&self, name: &str, value: MetricValue, count: u64, time: Instant) {
         let reader = self.reader();
 
         reader.get_and(name, |val| match &val[0].metric {
-            MetricInner::Counter(counter) => {
-                if let Some(val) = value.as_u64() {
-                    counter.store(time, val);
-                } else {
-                    self.error(MetricError::InvalidUnsignedValue(value.as_i64_unchecked()));
-                }
-            }
-            MetricInner::Gauge(gauge) => {
-                if let Some(val) = value.as_i64() {
-                    gauge.store(time, val);
-                } else {
-                    self.error(MetricError::InvalidSignedValue(value.as_u64_unchecked()));
-                }
-            }
-            MetricInner::Histogram(histogram) => {
-                if let Some(val) = value.as_u64() {
-                    histogram.increment(time, val, count);
-                } else {
-                    self.error(MetricError::InvalidUnsignedValue(value.as_i64_unchecked()));
-                }
-            }
+            MetricInner::Counter(counter) => match value.as_u64() {
+                Some(val) => counter.store(time, val),
+                _ => self.error(MetricError::invalid_unsigned(name, value.as_i64_unchecked())),
+            },
+            MetricInner::Gauge(gauge) => match value.as_i64() {
+                Some(val) => gauge.store(time, val),
+                _ => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
+            },
+            MetricInner::Histogram(histogram) => match value.as_u64() {
+                Some(val) => histogram.increment(time, val, count),
+                _ => self.error(MetricError::invalid_unsigned(name, value.as_i64_unchecked())),
+            },
         });
     }
 
@@ -171,16 +193,15 @@ impl State {
         reader.get_and(name, |val| match &val[0].metric {
             MetricInner::Counter(counter) => match value.as_u64() {
                 Some(val) => counter.add(time, val),
-                None => self.error(MetricError::InvalidUnsignedValue(value.as_i64_unchecked())),
+                None => self.error(MetricError::invalid_unsigned(name, value.as_i64_unchecked())),
             },
             MetricInner::Gauge(gauge) => match value.as_i64() {
                 Some(val) => gauge.add(time, val),
-                None => self.error(MetricError::InvalidSignedValue(value.as_u64_unchecked())),
+                None => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
-            MetricInner::Histogram(_) => self.error(MetricError::InvalidIncrement {
-                metric: name,
-                ty: MetricType::Histogram,
-            }),
+            MetricInner::Histogram(_) => {
+                self.error(MetricError::invalid_increment(name, MetricType::Histogram))
+            },
         });
     }
 
@@ -190,46 +211,27 @@ impl State {
         reader.get_and(name, |val| match &val[0].metric {
             MetricInner::Gauge(gauge) => match value.as_i64() {
                 Some(val) => gauge.sub(time, val),
-                None => self.error(MetricError::InvalidSignedValue(value.as_u64_unchecked())),
+                None => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
-            metric => self.error(MetricError::InvalidDecrement {
-                metric: name,
-                ty: metric.ty(),
-            }),
+            metric => self.error(MetricError::invalid_decrement(name, metric.ty())),
         });
     }
 
     pub(crate) fn record_counter_value(&self, name: &str, value: u64, time: Instant) {
         let reader = self.reader();
 
-        if reader.is_destroyed() {
-            return;
-        }
-
-        reader.get_and(name, |val| match &val[0].metric {
+         reader.get_and(name, |val| match &val[0].metric {
             MetricInner::Counter(counter) => counter.store(time, value),
-            metric => self.error(MetricError::WrongType {
-                metric: name,
-                expected: MetricType::Counter,
-                found: metric.ty(),
-            }),
+            metric => self.error(MetricError::wrong_type(name, MetricType::Counter, metric.ty()))
         });
     }
 
     pub(crate) fn record_gauge_value(&self, name: &str, value: i64, time: Instant) {
         let reader = self.reader();
 
-        if reader.is_destroyed() {
-            return;
-        }
-
         reader.get_and(name, |val| match &val[0].metric {
             MetricInner::Gauge(gauge) => gauge.store(time, value),
-            metric => self.error(MetricError::WrongType {
-                metric: name,
-                expected: MetricType::Gauge,
-                found: metric.ty(),
-            }),
+            metric => self.error(MetricError::wrong_type(name, MetricType::Gauge, metric.ty())),
         });
     }
 }

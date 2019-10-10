@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::Instant;
 
 /// Methods common to all metrics.
-pub trait Metric {
+pub trait Metric: Send + Sync {
     /// Get the current metric as a pointer to a
     /// type implementing `Any`.
     fn as_any(&self) -> Option<&dyn Any> {
