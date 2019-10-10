@@ -17,16 +17,21 @@
 #[macro_export]
 macro_rules! value {
     ($name:literal, $value:expr) => {
-        value!($name, $value, time = $crate::export::current_time())
+        value!($name, $value, 1)
     };
     ($name:literal, $value:expr, $count:expr) => {
-        unimplemented!()
+        value!($name, $value, $count, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        value!($name, $value, time = $crate::export::current_time())
+        value!($name, $value, 1, time = $time)
     };
     ($name:literal, $value:expr, $count:expr, time=$time:expr) => {
-        unimplemented!()
+        $crate::record_value(
+            $name,
+            $value,
+            $count,
+            $time
+        )
     };
 }
 
@@ -95,8 +100,15 @@ macro_rules! decrement {
 #[macro_export]
 macro_rules! counter {
     ($name:literal, $value:expr) => {
-        unimplemented!()
+        counter!($name, $value, time = $crate::export::current_time())
     };
+    ($name:literal, $value:expr, time = $time:expr) => {
+        $crate::record_counter_value(
+            $name,
+            $value,
+            $time
+        )
+    }
 }
 
 /// Set the value of a gauge.
@@ -110,7 +122,14 @@ macro_rules! counter {
 #[macro_export]
 macro_rules! gauge {
     ($name:literal, $value:expr) => {
-        unimplemented!()
+        gauge!($name, $value, time = $crate::export::current_time())
+    };
+    ($name:literal, $value:expr, time = $time:expr) => {
+        $crate::record_gauge_value(
+            $name,
+            $value,
+            $time
+        )
     };
 }
 

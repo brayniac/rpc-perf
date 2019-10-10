@@ -76,6 +76,7 @@
 //! [rgauge]: facade::register_gauge
 //! [rhist]: facade::register_histogram
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 
@@ -83,6 +84,8 @@ extern crate log;
 mod macros;
 
 mod dyncow;
+mod error;
+mod instant;
 mod metadata;
 mod percentile;
 mod state;
@@ -92,23 +95,19 @@ mod value;
 use std::borrow::Cow;
 
 pub use crate::dyncow::DynCow;
+pub use crate::error::{MetricError, RegisterError, UnregisterError};
+pub use crate::instant::{AsNanoseconds, Instant, Interval};
 pub use crate::metadata::Metadata;
 pub use crate::percentile::Percentile;
-pub use crate::traits::{Counter, Gauge, Histogram, Instant, Interval, Metric};
+pub use crate::traits::{Counter, Gauge, Histogram, Metric};
 pub use crate::value::MetricValue;
 
 use crate::state::{MetricInner, State};
 
-pub enum RegisterError {
-    // A metric has already been registered under that name
-    MetricAlreadyExists,
-    // The metric library has been shut down.
-    LibraryShutdown,
-}
-pub enum UnregisterError {
-    // There is no metric with that name to remove
-    NoSuchMetric,
-    LibraryShutdown,
+pub enum MetricType {
+    Counter,
+    Gauge,
+    Histogram
 }
 
 /// Register a new counter.
@@ -120,7 +119,7 @@ pub fn register_counter(
     counter: impl Into<DynCow<'static, dyn Counter + Send + Sync>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get().register_metric(name.into(), MetricInner::Counter(counter.into()), metadata)
+    State::get_force().register_metric(name.into(), MetricInner::Counter(counter.into()), metadata)
 }
 
 /// Register a new gauge.
@@ -132,7 +131,7 @@ pub fn register_gauge(
     gauge: impl Into<DynCow<'static, dyn Gauge + Send + Sync>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get().register_metric(name.into(), MetricInner::Gauge(gauge.into()), metadata)
+    State::get_force().register_metric(name.into(), MetricInner::Gauge(gauge.into()), metadata)
 }
 
 /// Register a new histogram.
@@ -144,7 +143,7 @@ pub fn register_histogram(
     histogram: impl Into<DynCow<'static, dyn Histogram + Send + Sync>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get().register_metric(
+    State::get_force().register_metric(
         name.into(),
         MetricInner::Histogram(histogram.into()),
         metadata,
@@ -155,7 +154,10 @@ pub fn register_histogram(
 ///
 /// If there is no such metric returns an error.
 pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
-    State::get().unregister_metric(name.as_ref())
+    match State::get() {
+        Some(state) => state.unregister_metric(name.as_ref()),
+        None => Ok(()),
+    }
 }
 
 /// Record a value to a metric. This corresponds to the `value!` macro.
@@ -166,7 +168,37 @@ pub fn record_value(
     count: impl Into<u64>,
     time: Instant,
 ) {
-    State::get().record_value(name.as_ref(), value.into(), count.into(), time);
+    if let Some(state) = State::get() {
+        state.record_value(name.as_ref(), value.into(), count.into(), time);
+    }
+}
+
+#[inline]
+pub fn record_increment(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
+    if let Some(state) = State::get() {
+        state.record_increment(name.as_ref(), amount.into(), time)
+    }
+}
+
+#[inline]
+pub fn record_decrement(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
+    if let Some(state) = State::get() {
+        state.record_decrement(name.as_ref(), amount.into(), time)
+    }
+}
+
+#[inline]
+pub fn record_counter_value(name: impl AsRef<str>, amount: impl Into<u64>, time: Instant) {
+    if let Some(state) = State::get() {
+        state.record_counter_value(name.as_ref(), amount.into(), time);
+    }
+}
+
+#[inline]
+pub fn record_gauge_value(name: impl AsRef<str>, amount: impl Into<i64>, time: Instant) {
+    if let Some(state) = State::get() {
+        state.record_gauge_value(name.as_ref(), amount.into(), time);
+    }
 }
 
 #[doc(hidden)]

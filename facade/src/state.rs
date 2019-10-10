@@ -1,22 +1,33 @@
 use std::borrow::Cow;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 
 use evmap::{self, ShallowCopy};
 use once_cell::sync::Lazy;
 use thread_local::CachedThreadLocal;
 
 use crate::{
-    Counter, DynCow, Gauge, Histogram, Instant, Metadata, MetricValue, RegisterError,
-    UnregisterError,
+    Counter, DynCow, Gauge, Histogram, Instant, Metadata, MetricError, MetricType, MetricValue,
+    RegisterError, UnregisterError,
 };
-
-static STATE: Lazy<State> = Lazy::new(State::new);
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum MetricInner {
     Counter(DynCow<'static, dyn Counter + Send + Sync>),
     Gauge(DynCow<'static, dyn Gauge + Send + Sync>),
     Histogram(DynCow<'static, dyn Histogram + Send + Sync>),
+}
+
+impl MetricInner {
+    pub(crate) fn ty(&self) -> MetricType {
+        match self {
+            Self::Counter(_) => MetricType::Counter,
+            Self::Gauge(_) => MetricType::Gauge,
+            Self::Histogram(_) => MetricType::Histogram,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -28,6 +39,12 @@ pub(crate) struct MetricInstance {
 type WriteHandle = evmap::WriteHandle<Cow<'static, str>, MetricInstance>;
 type ReadHandle = evmap::ReadHandle<Cow<'static, str>, MetricInstance>;
 type ReadHandleFactory = evmap::ReadHandleFactory<Cow<'static, str>, MetricInstance>;
+
+static INITIALIZED: AtomicBool = AtomicBool::new(false);
+static STATE: Lazy<State> = Lazy::new(|| {
+    INITIALIZED.store(true, Ordering::Relaxed);
+    State::new()
+});
 
 pub(crate) struct State {
     writer: Mutex<WriteHandle>,
@@ -50,7 +67,18 @@ impl State {
         self.tls.get_or(|| self.factory.handle())
     }
 
-    pub(crate) fn get() -> &'static Self {
+    #[inline]
+    pub(crate) fn get() -> Option<&'static Self> {
+        if INITIALIZED.load(Ordering::Relaxed) {
+            Some(&*STATE)
+        } else {
+            None
+        }
+    }
+
+    /// If the value hasn't been initializes then it creates it as well
+    #[inline]
+    pub(crate) fn get_force() -> &'static Self {
         &*STATE
     }
 
@@ -104,51 +132,105 @@ impl State {
         Ok(())
     }
 
-    pub(crate) fn record_value(
-        &self,
-        name: &str,
-        value: MetricValue,
-        count: u64,
-        time: Instant,
-    ) -> bool {
+    #[cold]
+    fn error(&self, err: MetricError) {
+        unimplemented!()
+    }
+
+    pub(crate) fn record_value(&self, name: &str, value: MetricValue, count: u64, time: Instant) {
+        let reader = self.reader();
+
+        reader.get_and(name, |val| match &val[0].metric {
+            MetricInner::Counter(counter) => {
+                if let Some(val) = value.as_u64() {
+                    counter.store(time, val);
+                } else {
+                    self.error(MetricError::InvalidUnsignedValue(value.as_i64_unchecked()));
+                }
+            }
+            MetricInner::Gauge(gauge) => {
+                if let Some(val) = value.as_i64() {
+                    gauge.store(time, val);
+                } else {
+                    self.error(MetricError::InvalidSignedValue(value.as_u64_unchecked()));
+                }
+            }
+            MetricInner::Histogram(histogram) => {
+                if let Some(val) = value.as_u64() {
+                    histogram.increment(time, val, count);
+                } else {
+                    self.error(MetricError::InvalidUnsignedValue(value.as_i64_unchecked()));
+                }
+            }
+        });
+    }
+
+    pub(crate) fn record_increment(&self, name: &str, value: MetricValue, time: Instant) {
+        let reader = self.reader();
+
+        reader.get_and(name, |val| match &val[0].metric {
+            MetricInner::Counter(counter) => match value.as_u64() {
+                Some(val) => counter.add(time, val),
+                None => self.error(MetricError::InvalidUnsignedValue(value.as_i64_unchecked())),
+            },
+            MetricInner::Gauge(gauge) => match value.as_i64() {
+                Some(val) => gauge.add(time, val),
+                None => self.error(MetricError::InvalidSignedValue(value.as_u64_unchecked())),
+            },
+            MetricInner::Histogram(_) => self.error(MetricError::InvalidIncrement {
+                metric: name,
+                ty: MetricType::Histogram,
+            }),
+        });
+    }
+
+    pub(crate) fn record_decrement(&self, name: &str, value: MetricValue, time: Instant) {
+        let reader = self.reader();
+
+        reader.get_and(name, |val| match &val[0].metric {
+            MetricInner::Gauge(gauge) => match value.as_i64() {
+                Some(val) => gauge.sub(time, val),
+                None => self.error(MetricError::InvalidSignedValue(value.as_u64_unchecked())),
+            },
+            metric => self.error(MetricError::InvalidDecrement {
+                metric: name,
+                ty: metric.ty(),
+            }),
+        });
+    }
+
+    pub(crate) fn record_counter_value(&self, name: &str, value: u64, time: Instant) {
         let reader = self.reader();
 
         if reader.is_destroyed() {
-            return false;
+            return;
         }
 
-        reader
-            .get_and(name, |val| {
-                let ref inner = val[0];
+        reader.get_and(name, |val| match &val[0].metric {
+            MetricInner::Counter(counter) => counter.store(time, value),
+            metric => self.error(MetricError::WrongType {
+                metric: name,
+                expected: MetricType::Counter,
+                found: metric.ty(),
+            }),
+        });
+    }
 
-                match &inner.metric {
-                    MetricInner::Counter(counter) => {
-                        if let Some(val) = value.as_u64() {
-                            counter.store(time, val);
-                        } else {
-                            // TODO: How to do error handling?
-                            warn!("Tried record an invalid value to a counter");
-                        }
-                    }
-                    MetricInner::Gauge(gauge) => {
-                        if let Some(val) = value.as_i64() {
-                            gauge.store(time, val);
-                        } else {
-                            // TODO: error handling?
-                            warn!("Tried to record an invalid value to a gauge");
-                        }
-                    }
-                    MetricInner::Histogram(histogram) => {
-                        if let Some(val) = value.as_u64() {
-                            histogram.increment(time, val, count);
-                        } else {
-                            // TODO: error handling?
-                            warn!("Tried to record a negative invalid value to a histogram");
-                        }
-                    }
-                }
-            })
-            .is_some()
+    pub(crate) fn record_gauge_value(&self, name: &str, value: i64, time: Instant) {
+        let reader = self.reader();
+
+        if reader.is_destroyed() {
+            return;
+        }
+
+        reader.get_and(name, |val| match &val[0].metric {
+            MetricInner::Gauge(gauge) => gauge.store(time, value),
+            metric => self.error(MetricError::WrongType {
+                metric: name,
+                expected: MetricType::Gauge,
+                found: metric.ty(),
+            }),
+        });
     }
 }
 

@@ -1,12 +1,6 @@
 use std::any::Any;
 
-// TODO: Determine how to represent an instant
-pub struct Instant {}
-
-pub struct Interval {
-    pub start: Instant,
-    pub end: Instant,
-}
+use crate::Instant;
 
 /// Methods common to all metrics.
 pub trait Metric {
