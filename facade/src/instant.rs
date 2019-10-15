@@ -77,3 +77,9 @@ impl Sub<Instant> for Instant {
         }
     }
 }
+
+impl From<Interval> for crate::MetricValue {
+    fn from(intvl: Interval) -> Self {
+        Self::Unsigned(intvl.as_nanos())
+    }
+}

@@ -89,6 +89,12 @@ fn atomic_add(b: &mut Bencher) {
     b.iter(|| ctr.fetch_add(37, Ordering::Relaxed));
 }
 
+fn mutex_lock(b: &mut Bencher) {
+    let mutex = std::sync::Mutex::new(());
+
+    b.iter(|| mutex.lock());
+}
+
 fn current_time(b: &mut Bencher) {
     b.iter(|| Instant::now());
 }
@@ -98,6 +104,7 @@ fn std_current_time(b: &mut Bencher) {
 }
 
 fn bench_all(b: &mut Criterion) {
+    b.bench_function("mutex_lock", mutex_lock);
     b.bench_function("atomic_add", atomic_add);
     b.bench_function("thread_id", thread_id);
     b.bench_function("current_time", current_time);

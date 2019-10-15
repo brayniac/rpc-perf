@@ -131,10 +131,10 @@ macro_rules! gauge {
 #[macro_export]
 macro_rules! interval {
     ($name:literal, $value:expr) => {
-        unimplemented!()
+        $crate::export::record_value($name, $value, 1, $crate::export::current_time())
     };
     ($name:literal, $start:expr, $end:expr) => {
-        unimplemented!()
+        $crate::export::record_value($name, $start - $end, 1, $end)
     };
 }
 

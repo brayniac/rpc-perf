@@ -4,37 +4,14 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use evmap::{self, ShallowCopy};
+use evmap;
 use once_cell::sync::Lazy;
 use thread_local::CachedThreadLocal;
 
 use crate::{
-    Counter, DynCow, Gauge, Histogram, Instant, Metadata, MetricError, MetricType, MetricValue,
-    RegisterError, UnregisterError,
+    Instant, Metadata, MetricError, MetricInstance, MetricType, MetricVal as MetricInner,
+    MetricValue, RegisterError, UnregisterError,
 };
-
-#[derive(Eq, PartialEq)]
-pub(crate) enum MetricInner {
-    Counter(DynCow<'static, dyn Counter>),
-    Gauge(DynCow<'static, dyn Gauge>),
-    Histogram(DynCow<'static, dyn Histogram>),
-}
-
-impl MetricInner {
-    pub(crate) fn ty(&self) -> MetricType {
-        match self {
-            Self::Counter(_) => MetricType::Counter,
-            Self::Gauge(_) => MetricType::Gauge,
-            Self::Histogram(_) => MetricType::Histogram,
-        }
-    }
-}
-
-#[derive(Eq, PartialEq)]
-pub(crate) struct MetricInstance {
-    metric: MetricInner,
-    metadata: Metadata,
-}
 
 #[derive(Clone)]
 pub(crate) struct GlobalMetadata {
@@ -118,7 +95,7 @@ impl State {
         metadata: Metadata,
     ) -> Result<(), RegisterError> {
         let mut writer = self.writer.lock().unwrap();
-        let instance = MetricInstance { metric, metadata };
+        let instance = MetricInstance::new(metric, metadata);
 
         if writer.is_destroyed() {
             return Err(RegisterError::LibraryShutdown);
@@ -182,7 +159,7 @@ impl State {
     pub(crate) fn record_value(&self, name: &str, value: MetricValue, count: u64, time: Instant) {
         let reader = self.reader();
 
-        reader.get_and(name, |val| match &val[0].metric {
+        reader.get_and(name, |val| match val[0].metric() {
             MetricInner::Counter(counter) => match value.as_u64() {
                 Some(val) => counter.store(time, val),
                 _ => self.error(MetricError::invalid_unsigned(
@@ -207,7 +184,7 @@ impl State {
     pub(crate) fn record_increment(&self, name: &str, value: MetricValue, time: Instant) {
         let reader = self.reader();
 
-        reader.get_and(name, |val| match &val[0].metric {
+        reader.get_and(name, |val| match val[0].metric() {
             MetricInner::Counter(counter) => match value.as_u64() {
                 Some(val) => counter.add(time, val),
                 None => self.error(MetricError::invalid_unsigned(
@@ -228,7 +205,7 @@ impl State {
     pub(crate) fn record_decrement(&self, name: &str, value: MetricValue, time: Instant) {
         let reader = self.reader();
 
-        reader.get_and(name, |val| match &val[0].metric {
+        reader.get_and(name, |val| match val[0].metric() {
             MetricInner::Gauge(gauge) => match value.as_i64() {
                 Some(val) => gauge.sub(time, val),
                 None => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
@@ -240,7 +217,7 @@ impl State {
     pub(crate) fn record_counter_value(&self, name: &str, value: u64, time: Instant) {
         let reader = self.reader();
 
-        reader.get_and(name, |val| match &val[0].metric {
+        reader.get_and(name, |val| match val[0].metric() {
             MetricInner::Counter(counter) => counter.store(time, value),
             metric => self.error(MetricError::wrong_type(
                 name,
@@ -253,7 +230,7 @@ impl State {
     pub(crate) fn record_gauge_value(&self, name: &str, value: i64, time: Instant) {
         let reader = self.reader();
 
-        reader.get_and(name, |val| match &val[0].metric {
+        reader.get_and(name, |val| match val[0].metric() {
             MetricInner::Gauge(gauge) => gauge.store(time, value),
             metric => self.error(MetricError::wrong_type(
                 name,
@@ -262,23 +239,14 @@ impl State {
             )),
         });
     }
-}
 
-impl ShallowCopy for MetricInstance {
-    unsafe fn shallow_copy(&mut self) -> Self {
-        Self {
-            metric: self.metric.shallow_copy(),
-            metadata: self.metadata,
-        }
-    }
-}
+    pub(crate) fn for_each_metric<F, R, C>(&self, mut func: F) -> C
+    where
+        C: std::iter::FromIterator<R>,
+        F: FnMut(&str, &MetricInstance) -> R,
+    {
+        let reader = self.reader();
 
-impl ShallowCopy for MetricInner {
-    unsafe fn shallow_copy(&mut self) -> Self {
-        match self {
-            Self::Counter(x) => Self::Counter(x.shallow_copy()),
-            Self::Gauge(x) => Self::Gauge(x.shallow_copy()),
-            Self::Histogram(x) => Self::Histogram(x.shallow_copy()),
-        }
+        reader.map_into(move |key, vals| func(&*key, &vals[0]))
     }
 }

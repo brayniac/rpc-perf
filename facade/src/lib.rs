@@ -95,8 +95,8 @@ mod macros;
 
 mod dyncow;
 mod error;
+mod inner;
 mod instant;
-mod introspect;
 mod metadata;
 mod percentile;
 mod scoped;
@@ -108,6 +108,7 @@ use std::borrow::Cow;
 
 pub use crate::dyncow::DynCow;
 pub use crate::error::{MetricError, RegisterError, UnregisterError};
+pub use crate::inner::{MetricInstance, MetricVal};
 pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
 pub use crate::percentile::Percentile;
@@ -115,7 +116,7 @@ pub use crate::scoped::ScopedMetric;
 pub use crate::traits::{Counter, Gauge, Histogram, Metric};
 pub use crate::value::MetricValue;
 
-use crate::state::{MetricInner, State};
+use crate::state::State;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MetricType {
@@ -143,7 +144,7 @@ pub fn register_counter(
     counter: impl Into<DynCow<'static, dyn Counter>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get_force().register_metric(name.into(), MetricInner::Counter(counter.into()), metadata)
+    State::get_force().register_metric(name.into(), MetricVal::Counter(counter.into()), metadata)
 }
 
 /// Register a new gauge.
@@ -155,7 +156,7 @@ pub fn register_gauge(
     gauge: impl Into<DynCow<'static, dyn Gauge>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get_force().register_metric(name.into(), MetricInner::Gauge(gauge.into()), metadata)
+    State::get_force().register_metric(name.into(), MetricVal::Gauge(gauge.into()), metadata)
 }
 
 /// Register a new histogram.
@@ -169,7 +170,7 @@ pub fn register_histogram(
 ) -> Result<(), RegisterError> {
     State::get_force().register_metric(
         name.into(),
-        MetricInner::Histogram(histogram.into()),
+        MetricVal::Histogram(histogram.into()),
         metadata,
     )
 }
@@ -196,6 +197,18 @@ pub fn set_error_fn(err_fn: impl Fn(MetricError) + Send + Sync + 'static) {
     use std::sync::Arc;
 
     State::get_force().set_error_fn(Arc::new(err_fn));
+}
+
+/// Run a function over each
+pub fn for_each_metric<C, F, R>(func: F) -> C
+where
+    C: std::iter::FromIterator<R>,
+    F: FnMut(&str, &MetricInstance) -> R,
+{
+    match State::get() {
+        Some(state) => state.for_each_metric(func),
+        None => C::from_iter(std::iter::empty()),
+    }
 }
 
 #[doc(hidden)]
