@@ -1,7 +1,6 @@
-
 use facade::*;
 
-use criterion::{Criterion, criterion_group, criterion_main, Bencher};
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -10,13 +9,13 @@ fn thread_id(bencher: &mut Bencher) {
 }
 
 struct AtomicCounter {
-    ctr: AtomicU64
+    ctr: AtomicU64,
 }
 
 impl AtomicCounter {
     pub fn new() -> Self {
         Self {
-            ctr: AtomicU64::new(0)
+            ctr: AtomicU64::new(0),
         }
     }
 }
@@ -41,15 +40,16 @@ struct Noop;
 impl Metric for Noop {}
 impl Counter for Noop {
     fn store(&self, _: Instant, _: u64) {}
-    fn load(&self) -> u64 { 0 }
+    fn load(&self) -> u64 {
+        0
+    }
     fn add(&self, _: Instant, _: u64) {}
 }
 
 fn increment_counter(bench: &mut Bencher) {
     let counter = AtomicCounter::new();
-    let _scoped = unsafe {
-        ScopedMetric::counter("test.metric", &counter, Metadata::empty()).unwrap()
-    };
+    let _scoped =
+        unsafe { ScopedMetric::counter("test.metric", &counter, Metadata::empty()).unwrap() };
 
     bench.iter(|| {
         increment!("test.metric", MetricValue::Unsigned(10));
@@ -58,9 +58,8 @@ fn increment_counter(bench: &mut Bencher) {
 
 fn set_noop_metric(bench: &mut Bencher) {
     let counter = Noop;
-    let _scoped = unsafe {
-        ScopedMetric::counter("test.noop", &counter, Metadata::empty()).unwrap()
-    };
+    let _scoped =
+        unsafe { ScopedMetric::counter("test.noop", &counter, Metadata::empty()).unwrap() };
 
     bench.iter(|| {
         value!("test.noop", MetricValue::Unsigned(56));
@@ -76,7 +75,11 @@ fn noop_metric_external_counter(bench: &mut Bencher) {
     let time = Instant::now();
 
     bench.iter(|| {
-        value!("test.noop.external-time", MetricValue::Unsigned(56), time=time)
+        value!(
+            "test.noop.external-time",
+            MetricValue::Unsigned(56),
+            time = time
+        )
     })
 }
 

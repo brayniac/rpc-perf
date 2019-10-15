@@ -1,11 +1,10 @@
-
 use std::ops::Index;
 
 const EMPTY_ARRAY: &[(&str, &str)] = &[];
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Metadata {
-    attributes: &'static [(&'static str, &'static str)]
+    attributes: &'static [(&'static str, &'static str)],
 }
 
 impl Metadata {
@@ -35,7 +34,7 @@ impl Metadata {
     /// Create an empty set of metadata
     pub const fn empty() -> Self {
         Self {
-            attributes: EMPTY_ARRAY
+            attributes: EMPTY_ARRAY,
         }
     }
 }
@@ -46,7 +45,7 @@ impl Index<&'_ str> for Metadata {
     fn index(&self, key: &str) -> &'static str {
         match self.get(key) {
             Some(x) => x,
-            None => panic!("key `{}` not within the metadata map", key)
+            None => panic!("key `{}` not within the metadata map", key),
         }
     }
 }

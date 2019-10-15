@@ -20,16 +20,16 @@
 //!
 //! # Introspection
 //! TODO
-//! 
+//!
 //! # Error Handling
 //! This library has a somewhat idiosyncratic approach to error handling.
-//! Instead of returning a result from each metric function/macro there 
-//! is a global error handling function (set by 
+//! Instead of returning a result from each metric function/macro there
+//! is a global error handling function (set by
 //! [`set_error_fn`](facade::set_error_fn)) which is called with the error
-//! whenever an invalid action is performed. 
-//! 
+//! whenever an invalid action is performed.
+//!
 //! **Important Note:** attempting to record values to a non-existant metric
-//! is not considered an error for performance reasons. 
+//! is not considered an error for performance reasons.
 //!
 //! # Example
 //! ```rust
@@ -37,7 +37,7 @@
 //! # struct Metric;
 //! # impl facade::Metric for Metric {}
 //! # impl Histogram for Metric {
-//! #   fn record_values(&self, time: Instant, val: u64, count: u64) {}
+//! #   fn increment(&self, time: Instant, val: u64, count: u64) {}
 //! # }
 //! # fn function_that_takes_some_time() {}
 //! // Create a metric named "example.metric" with no associated metadata
@@ -72,11 +72,11 @@
 //! value!("example.static", 120, 44);
 //!
 //! // Can also record timings
-//! let start = current_time();
+//! let start = Instant::now();
 //! function_that_takes_some_time();
-//! let end = current_time();
+//! let end = Instant::now();
 //! // This gets translated to a duration in nanoseconds
-//! timing!("example.metadata", start, end);
+//! interval!("example.metadata", start, end);
 //! ```
 //!
 //! [counter]: facade::Counter
@@ -96,6 +96,7 @@ mod macros;
 mod dyncow;
 mod error;
 mod instant;
+mod introspect;
 mod metadata;
 mod percentile;
 mod scoped;
@@ -110,9 +111,9 @@ pub use crate::error::{MetricError, RegisterError, UnregisterError};
 pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
 pub use crate::percentile::Percentile;
+pub use crate::scoped::ScopedMetric;
 pub use crate::traits::{Counter, Gauge, Histogram, Metric};
 pub use crate::value::MetricValue;
-pub use crate::scoped::ScopedMetric;
 
 use crate::state::{MetricInner, State};
 
@@ -128,7 +129,7 @@ impl std::fmt::Display for MetricType {
         match self {
             Self::Counter => write!(fmt, "counter"),
             Self::Gauge => write!(fmt, "gauge"),
-            Self::Histogram => write!(fmt, "histogram")
+            Self::Histogram => write!(fmt, "histogram"),
         }
     }
 }
@@ -183,63 +184,14 @@ pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
     }
 }
 
-/// Record a value to a metric. This corresponds to the `value!` macro.
-#[inline]
-pub fn record_value(
-    name: impl AsRef<str>,
-    value: impl Into<MetricValue>,
-    count: u64,
-    time: Instant,
-) {
-    if let Some(state) = State::get() {
-        state.record_value(name.as_ref(), value.into(), count, time);
-    }
-}
-
-/// Record an increment to a counter or gauge. This corresponds
-/// to the `increment!` macro.
-#[inline]
-pub fn record_increment(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
-    if let Some(state) = State::get() {
-        state.record_increment(name.as_ref(), amount.into(), time)
-    }
-}
-
-/// Record a decrement to a gauge. This corresponds to the
-/// `decrement!` macro.
-#[inline]
-pub fn record_decrement(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
-    if let Some(state) = State::get() {
-        state.record_decrement(name.as_ref(), amount.into(), time)
-    }
-}
-
-/// Record a value, calls the error function if the metric is 
-/// not a counter.
-#[inline]
-pub fn record_counter_value(name: impl AsRef<str>, amount: u64, time: Instant) {
-    if let Some(state) = State::get() {
-        state.record_counter_value(name.as_ref(), amount, time);
-    }
-}
-
-/// Record a value, calls the error function if the metric is
-/// not a gauge.
-#[inline]
-pub fn record_gauge_value(name: impl AsRef<str>, amount: i64, time: Instant) {
-    if let Some(state) = State::get() {
-        state.record_gauge_value(name.as_ref(), amount, time);
-    }
-}
-
 /// Set the error function.
-/// 
+///
 /// Due to the impracticality of having every single metric
 /// return a `Result` this library instead opts to have an
 /// internal error function that is called whenever an error
 /// occurs.
-/// 
-/// The default error function will log a warning when 
+///
+/// The default error function will log a warning when
 pub fn set_error_fn(err_fn: impl Fn(MetricError) + Send + Sync + 'static) {
     use std::sync::Arc;
 
@@ -256,5 +208,54 @@ pub mod export {
 
     pub fn current_time() -> Instant {
         Instant::now()
+    }
+
+    /// Record a value to a metric. This corresponds to the `value!` macro.
+    #[inline]
+    pub fn record_value(
+        name: impl AsRef<str>,
+        value: impl Into<MetricValue>,
+        count: u64,
+        time: Instant,
+    ) {
+        if let Some(state) = State::get() {
+            state.record_value(name.as_ref(), value.into(), count, time);
+        }
+    }
+
+    /// Record an increment to a counter or gauge. This corresponds
+    /// to the `increment!` macro.
+    #[inline]
+    pub fn record_increment(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
+        if let Some(state) = State::get() {
+            state.record_increment(name.as_ref(), amount.into(), time)
+        }
+    }
+
+    /// Record a decrement to a gauge. This corresponds to the
+    /// `decrement!` macro.
+    #[inline]
+    pub fn record_decrement(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
+        if let Some(state) = State::get() {
+            state.record_decrement(name.as_ref(), amount.into(), time)
+        }
+    }
+
+    /// Record a value, calls the error function if the metric is
+    /// not a counter.
+    #[inline]
+    pub fn record_counter_value(name: impl AsRef<str>, amount: u64, time: Instant) {
+        if let Some(state) = State::get() {
+            state.record_counter_value(name.as_ref(), amount, time);
+        }
+    }
+
+    /// Record a value, calls the error function if the metric is
+    /// not a gauge.
+    #[inline]
+    pub fn record_gauge_value(name: impl AsRef<str>, amount: i64, time: Instant) {
+        if let Some(state) = State::get() {
+            state.record_gauge_value(name.as_ref(), amount, time);
+        }
     }
 }

@@ -12,10 +12,10 @@ pub trait Metric: Send + Sync {
 }
 
 /// A counter. Counts things.
-/// 
+///
 /// This trait should be implemented by any type that
 /// should be used as a counter metric.
-/// 
+///
 /// Counters should be used when counting something.
 /// (e.g. the total number of hits on a web endpoint, the
 /// number of times that a function has run, etc.)
@@ -27,10 +27,10 @@ pub trait Counter: Metric {
 }
 
 /// A gauge. Measures the instananeous value of some property.
-/// 
+///
 /// This trait should be implemented by any type that
 /// can be used as a gauge metric.
-/// 
+///
 /// Gauges measure the instantaneous value of some
 /// property. (e.g. number of requests currently in flight,
 /// current CPU usage, memory usage, etc.)
@@ -43,7 +43,7 @@ pub trait Gauge: Metric {
 }
 
 /// A histogram, records values and calculates some sort of summary.
-/// 
+///
 /// This is the most flexible of all the metric types.
 pub trait Histogram: Metric {
     fn increment(&self, time: Instant, val: u64, count: u64);

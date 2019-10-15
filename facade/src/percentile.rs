@@ -1,17 +1,14 @@
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Percentile {
     // Representation is a fixed-point number from 1 to 100000
     // with 100000 being 1 and 0 being 0.
-    val: u32
+    val: u32,
 }
 
 macro_rules! percentile {
     ($val:expr) => {
-        Percentile {
-            val: $val
-        }
-    }
+        Percentile { val: $val }
+    };
 }
 
 impl Percentile {
@@ -19,7 +16,7 @@ impl Percentile {
         if val > 100000 {
             return None;
         }
-        Some(Percentile{ val })
+        Some(Percentile { val })
     }
 
     pub const unsafe fn new_unchecked(val: u32) -> Self {
@@ -32,7 +29,7 @@ impl Percentile {
 
     pub fn from_float(val: f64) -> Self {
         Self {
-            val: (val.min(1.0).max(0.0) * 100000.0) as u32
+            val: (val.min(1.0).max(0.0) * 100000.0) as u32,
         }
     }
 
@@ -83,11 +80,11 @@ impl Percentile {
     pub const fn p95() -> Self {
         percentile!(95000)
     }
-    
+
     pub const fn p99() -> Self {
         percentile!(99000)
     }
-    
+
     pub const fn p999() -> Self {
         percentile!(99900)
     }

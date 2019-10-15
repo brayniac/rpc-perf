@@ -1,9 +1,7 @@
-
-
 #[derive(Copy, Clone, Debug)]
 pub enum MetricValue {
     Signed(i64),
-    Unsigned(u64)
+    Unsigned(u64),
 }
 
 impl MetricValue {
@@ -21,7 +19,7 @@ impl MetricValue {
         match self {
             Self::Unsigned(x) if x > std::i64::MAX as u64 => None,
             Self::Unsigned(x) => Some(x as i64),
-            Self::Signed(x) => Some(x)
+            Self::Signed(x) => Some(x),
         }
     }
 
@@ -42,5 +40,50 @@ impl MetricValue {
     }
 }
 
+impl From<u8> for MetricValue {
+    fn from(v: u8) -> Self {
+        Self::Unsigned(v.into())
+    }
+}
 
+impl From<u16> for MetricValue {
+    fn from(v: u16) -> Self {
+        Self::Unsigned(v.into())
+    }
+}
 
+impl From<u32> for MetricValue {
+    fn from(v: u32) -> Self {
+        Self::Unsigned(v.into())
+    }
+}
+
+impl From<u64> for MetricValue {
+    fn from(v: u64) -> Self {
+        Self::Unsigned(v)
+    }
+}
+
+impl From<i8> for MetricValue {
+    fn from(v: i8) -> Self {
+        Self::Signed(v.into())
+    }
+}
+
+impl From<i16> for MetricValue {
+    fn from(v: i16) -> Self {
+        Self::Signed(v.into())
+    }
+}
+
+impl From<i32> for MetricValue {
+    fn from(v: i32) -> Self {
+        Self::Signed(v.into())
+    }
+}
+
+impl From<i64> for MetricValue {
+    fn from(v: i64) -> Self {
+        Self::Signed(v)
+    }
+}

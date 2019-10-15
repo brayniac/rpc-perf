@@ -1,13 +1,12 @@
-
 /// Record a value to a metric.
-/// 
+///
 /// For counters and gauges this should directly set the value of
 /// the metric, for histograms it will get rolled into a summary.
-/// 
+///
 /// The required parameters for this macro are
 /// - `name`: a string literal with the name of the metric
 /// - `value`: the value to be recorded
-/// 
+///
 /// Optional parameters
 /// - `count`: The number of times the value should be registered.
 ///     This is ignored for counters and gauges. If not given, this
@@ -26,24 +25,19 @@ macro_rules! value {
         value!($name, $value, $count, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, $count:expr, time=$time:expr) => {
-        $crate::record_value(
-            $name,
-            $value,
-            $count,
-            $time
-        )
+        $crate::export::record_value($name, $value, $count, $time)
     };
 }
 
 /// Increment a counter or gauge.
-/// 
+///
 /// If the metric is a counter or a gauge then it will increment the
 /// stored value within the metric. If the provided metric is not a
 /// histogram, then it will call the user-provided error function.
-/// 
+///
 /// The the only required parameter for this macro is
 /// - `name`: a string literal with the name of the metric.
-/// 
+///
 /// Optional Paramters
 /// - `value`: the amount by which to increment the counter/gauge.
 ///     If not specified this defaults to `1`.
@@ -58,19 +52,19 @@ macro_rules! increment {
         increment!($name, $value, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        $crate::record_increment($name, $value, $time)
+        $crate::export::record_increment($name, $value, $time)
     };
 }
 
 /// Decrement a gauge.
-/// 
+///
 /// If the metric is a gauge then it will decrement the
 /// stored value within the metric. If the provided metric is not a
 /// histogram, then it will call the user-provided error function.
-/// 
+///
 /// The the only required parameter for this macro is
 /// - `name`: a string literal with the name of the metric.
-/// 
+///
 /// Optional Paramters
 /// - `value`: the amount by which to decrement the gauge.
 ///     If not specified this defaults to `1`.
@@ -85,15 +79,15 @@ macro_rules! decrement {
         decrement!($name, $value, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        $crate::record_decrement($name, $value, $time)
-    }
+        $crate::export::record_decrement($name, $value, $time)
+    };
 }
 
 /// Set the value of a counter.
-/// 
+///
 /// If the metric is not a counter then it will call the
 /// user-defined error function.
-/// 
+///
 /// ## Parameters
 /// - `name`: A string literal with the name of the metric.
 /// - `value`: The new value of the counter.
@@ -103,19 +97,15 @@ macro_rules! counter {
         counter!($name, $value, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        $crate::record_counter_value(
-            $name,
-            $value,
-            $time
-        )
-    }
+        $crate::export::record_counter_value($name, $value, $time)
+    };
 }
 
 /// Set the value of a gauge.
-/// 
+///
 /// If the metric is not a gauge then it will call the
 /// user-defined error function.
-/// 
+///
 /// ## Parameters
 /// - `name`: A string literal with the name of the metric.
 /// - `value`: The new value of the gauge.
@@ -125,19 +115,15 @@ macro_rules! gauge {
         gauge!($name, $value, time = $crate::export::current_time())
     };
     ($name:literal, $value:expr, time = $time:expr) => {
-        $crate::record_gauge_value(
-            $name,
-            $value,
-            $time
-        )
+        $crate::export::record_gauge_value($name, $value, $time)
     };
 }
 
 /// Record a timing interval.
-/// 
+///
 /// This is equivalent to calling `value!` with the
-/// interval. 
-/// 
+/// interval.
+///
 /// This macro supports two argument formats. Either
 /// it takes the duration the interval or it takes a
 /// start and end time and uses that to calculate the
@@ -149,7 +135,7 @@ macro_rules! interval {
     };
     ($name:literal, $start:expr, $end:expr) => {
         unimplemented!()
-    }
+    };
 }
 
 /// Register a new counter metric.
