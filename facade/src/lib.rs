@@ -19,7 +19,8 @@
 //! Otherwise, `Metadata` is created using the `metadata` macro.
 //!
 //! # Introspection
-//! TODO
+//! To examine and query metrics, use the
+//! [`for_each_metric`][for_each_metric] function.
 //!
 //! # Error Handling
 //! This library has a somewhat idiosyncratic approach to error handling.
@@ -85,6 +86,7 @@
 //! [rctr]: facade::register_counter
 //! [rgauge]: facade::register_gauge
 //! [rhist]: facade::register_histogram
+//! [for_each_metric]: facade::for_each_metric
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -192,14 +194,19 @@ pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
 /// internal error function that is called whenever an error
 /// occurs.
 ///
-/// The default error function will log a warning when
+/// The default error function will log a warning when an
+/// error occurrs.
 pub fn set_error_fn(err_fn: impl Fn(MetricError) + Send + Sync + 'static) {
     use std::sync::Arc;
 
     State::get_force().set_error_fn(Arc::new(err_fn));
 }
 
-/// Run a function over each
+/// Run a function over each metric and collect the result
+/// into a container.
+/// 
+/// Due to the underlying API limitations of evmap this is
+/// the only way to introspect existing metrics.
 pub fn for_each_metric<C, F, R>(func: F) -> C
 where
     C: std::iter::FromIterator<R>,
