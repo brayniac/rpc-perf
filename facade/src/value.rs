@@ -1,10 +1,9 @@
-
 /// A value that can be recorded into a metric.
 ///
 /// You shouldn't have to deal with this in most
 /// code. It is used by this library to accept a
 /// wider variety of types.
-/// 
+///
 /// However, if you want to make your type something
 /// that can be natively accepted by this metrics
 /// library, implement `From` or `Into<MetricsValue>`

@@ -3,7 +3,7 @@ use std::ops::Sub;
 use time;
 
 /// High-resolution timestamp.
-/// 
+///
 /// This timestamp behaves in most respects like
 /// [`std::time::Instant`](std::time::Instant).
 /// However, when subtracting two instants `A - B` it
@@ -31,7 +31,7 @@ impl Instant {
 }
 
 /// Timespan between two instance.
-/// 
+///
 /// Similar to [`std::time::Duration`](std::time::Duration).
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Interval {
@@ -40,7 +40,7 @@ pub struct Interval {
 
 impl Interval {
     /// Convert a number of seconds to an interval.
-    /// 
+    ///
     /// Saturates to the maximum value if secs is more
     /// than `u64::MAX` nanoseconds.
     pub fn from_seconds(secs: u64) -> Self {
@@ -50,7 +50,7 @@ impl Interval {
     }
 
     /// Convert a number of milliseconds to an interval.
-    /// 
+    ///
     /// Saturates to the maximum value if secs is more
     /// than `u64::MAX` nanoseconds.
     pub fn from_millis(millis: u64) -> Self {
@@ -60,7 +60,7 @@ impl Interval {
     }
 
     /// Convert a number of microseconds to an interval.
-    /// 
+    ///
     /// Saturates to the maximum value if secs is more
     /// than `u64::MAX` nanoseconds.
     pub fn from_micros(micros: u64) -> Self {
@@ -75,21 +75,21 @@ impl Interval {
     }
 
     /// Get number of seconds in the current interval.
-    /// 
+    ///
     /// Truncates towards zero.
     pub fn as_seconds(self) -> u64 {
         self.duration_ns / 1_000_000_000
     }
 
     /// Get number of milliseconds in the current interval.
-    /// 
+    ///
     /// Truncates towards zero.
     pub fn as_millis(self) -> u64 {
         self.duration_ns / 1_000_000
     }
 
     /// Get number of microseconds in the current interval.
-    /// 
+    ///
     /// Truncates towards zero.
     pub fn as_micros(self) -> u64 {
         self.duration_ns / 1_000

@@ -8,7 +8,7 @@ use crate::MetricType;
 pub enum Empty {}
 
 /// Error for when registering a metric fails.
-/// 
+///
 /// This enum should not be matched exhaustively.
 /// However, if for testing purposes it is desired
 /// to match exhaustively, that can be done by matching
@@ -33,7 +33,7 @@ pub enum RegisterError {
 }
 
 /// Error for when unregistering a metric fails.
-/// 
+///
 /// This enum should not be matched exhaustively.
 /// However, if for testing purposes it is desired
 /// to match exhaustively, that can be done by matching
@@ -58,7 +58,7 @@ pub enum UnregisterError {
 }
 
 /// Description of why writing to a metric failed.
-/// 
+///
 /// This enum should not be matched exhaustively.
 /// However, if for testing purposes it is desired
 /// to match exhaustively, that can be done by matching

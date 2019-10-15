@@ -5,10 +5,10 @@ use evmap::ShallowCopy;
 use crate::{Counter, DynCow, Gauge, Histogram, Metadata, MetricCommon};
 
 /// The type of a metric.
-/// 
+///
 /// This is provided for convenience but usually
 /// you'll want to match on [`Metric`][metric].
-/// 
+///
 /// [metric]: crate::Metric
 #[allow(missing_docs)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
