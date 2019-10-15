@@ -15,7 +15,7 @@
 //! Each individual metric can have metadata associated with.
 //! This is a set of static key-value pairs that can be used
 //! to store arbitrary properties of the metric. Empty metadata
-//! can be created by calling [`Metadata::new`](facade::Metadata::new).
+//! can be created by calling [`Metadata::new`](Metadata::new).
 //! Otherwise, `Metadata` is created using the `metadata` macro.
 //!
 //! # Introspection
@@ -25,9 +25,8 @@
 //! # Error Handling
 //! This library has a somewhat idiosyncratic approach to error handling.
 //! Instead of returning a result from each metric function/macro there
-//! is a global error handling function (set by
-//! [`set_error_fn`](facade::set_error_fn)) which is called with the error
-//! whenever an invalid action is performed.
+//! is a global error handling function (set by [`set_error_fn`](set_error_fn))
+//! which is called with the error whenever an invalid action is performed.
 //!
 //! **Important Note:** attempting to record values to a non-existant metric
 //! is not considered an error for performance reasons.
@@ -80,13 +79,15 @@
 //! interval!("example.metadata", start, end);
 //! ```
 //!
-//! [counter]: facade::Counter
-//! [gauge]: facade::Gauge
-//! [histogram]: facade::Histogram
-//! [rctr]: facade::register_counter
-//! [rgauge]: facade::register_gauge
-//! [rhist]: facade::register_histogram
-//! [for_each_metric]: facade::for_each_metric
+//! [counter]: crate::Counter
+//! [gauge]: crate::Gauge
+//! [histogram]: crate::Histogram
+//! [rctr]: crate::register_counter
+//! [rgauge]: crate::register_gauge
+//! [rhist]: crate::register_histogram
+//! [for_each_metric]: crate::for_each_metric
+
+#![warn(intra_doc_link_resolution_failure, missing_docs)]
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -100,42 +101,23 @@ mod error;
 mod inner;
 mod instant;
 mod metadata;
-mod percentile;
 mod scoped;
 mod state;
 mod traits;
 mod value;
 
-use std::borrow::Cow;
-
 pub use crate::dyncow::DynCow;
 pub use crate::error::{MetricError, RegisterError, UnregisterError};
-pub use crate::inner::{MetricInstance, MetricVal};
+pub use crate::inner::{Metric, MetricInstance, MetricType};
 pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
-pub use crate::percentile::Percentile;
 pub use crate::scoped::ScopedMetric;
-pub use crate::traits::{Counter, Gauge, Histogram, Metric};
+pub use crate::traits::{Counter, Gauge, Histogram, MetricCommon};
 pub use crate::value::MetricValue;
 
+use std::borrow::Cow;
+
 use crate::state::State;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum MetricType {
-    Counter,
-    Gauge,
-    Histogram,
-}
-
-impl std::fmt::Display for MetricType {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Counter => write!(fmt, "counter"),
-            Self::Gauge => write!(fmt, "gauge"),
-            Self::Histogram => write!(fmt, "histogram"),
-        }
-    }
-}
 
 /// Register a new counter.
 ///
@@ -146,7 +128,7 @@ pub fn register_counter(
     counter: impl Into<DynCow<'static, dyn Counter>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get_force().register_metric(name.into(), MetricVal::Counter(counter.into()), metadata)
+    State::get_force().register_metric(name.into(), Metric::Counter(counter.into()), metadata)
 }
 
 /// Register a new gauge.
@@ -158,7 +140,7 @@ pub fn register_gauge(
     gauge: impl Into<DynCow<'static, dyn Gauge>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get_force().register_metric(name.into(), MetricVal::Gauge(gauge.into()), metadata)
+    State::get_force().register_metric(name.into(), Metric::Gauge(gauge.into()), metadata)
 }
 
 /// Register a new histogram.
@@ -170,11 +152,7 @@ pub fn register_histogram(
     histogram: impl Into<DynCow<'static, dyn Histogram>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get_force().register_metric(
-        name.into(),
-        MetricVal::Histogram(histogram.into()),
-        metadata,
-    )
+    State::get_force().register_metric(name.into(), Metric::Histogram(histogram.into()), metadata)
 }
 
 /// Unregister an existing metric.
@@ -204,7 +182,7 @@ pub fn set_error_fn(err_fn: impl Fn(MetricError) + Send + Sync + 'static) {
 
 /// Run a function over each metric and collect the result
 /// into a container.
-/// 
+///
 /// Due to the underlying API limitations of evmap this is
 /// the only way to introspect existing metrics.
 pub fn for_each_metric<C, F, R>(func: F) -> C

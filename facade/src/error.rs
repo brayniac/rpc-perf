@@ -7,44 +7,95 @@ use crate::MetricType;
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Empty {}
 
+/// Error for when registering a metric fails.
+/// 
+/// This enum should not be matched exhaustively.
+/// However, if for testing purposes it is desired
+/// to match exhaustively, that can be done by matching
+/// the final variant like this
+/// ```rust
+/// # let data = MetricErrorData::InvalidUnsignedValue(0);
+/// match data {
+///     // ...
+///     __Nonexhaustive(empty) => match empty { },
+/// #   _ => ()
+/// }
+/// ```
 #[derive(Copy, Clone, Debug)]
 pub enum RegisterError {
-    // A metric has already been registered under that name
+    /// A metric has already been registered under that name
     MetricAlreadyExists,
-    // The metric library has been shut down.
+    /// The metrics library has been shut down
     LibraryShutdown,
 
     #[doc(hidden)]
     __Nonexhaustive(Empty),
 }
 
+/// Error for when unregistering a metric fails.
+/// 
+/// This enum should not be matched exhaustively.
+/// However, if for testing purposes it is desired
+/// to match exhaustively, that can be done by matching
+/// the final variant like this
+/// ```rust
+/// # let data = MetricErrorData::InvalidUnsignedValue(0);
+/// match data {
+///     // ...
+///     __Nonexhaustive(empty) => match empty { },
+/// #   _ => ()
+/// }
+/// ```
 #[derive(Copy, Clone, Debug)]
 pub enum UnregisterError {
-    // There is no metric with that name to remove
+    /// There is no metric with that name to remove
     NoSuchMetric,
+    /// The metrics library has been shut down
     LibraryShutdown,
 
     #[doc(hidden)]
     __Nonexhaustive(Empty),
 }
 
+/// Description of why writing to a metric failed.
+/// 
+/// This enum should not be matched exhaustively.
+/// However, if for testing purposes it is desired
+/// to match exhaustively, that can be done by matching
+/// the final variant like this
+/// ```rust
+/// # let data = MetricErrorData::InvalidUnsignedValue(0);
+/// match data {
+///     // ...
+///     __Nonexhaustive(empty) => match empty { },
+/// #   _ => ()
+/// }
+/// ```
 #[derive(Copy, Clone, Debug)]
 pub enum MetricErrorData {
+    /// Tried to pass a signed value that was negative to
+    /// something expecting an unsigned value.
     InvalidUnsignedValue(i64),
+    /// Tried to pass an unsigned value that was too large to something
+    /// expecting a signed value.
     InvalidSignedValue(u64),
     /// The metric is not a type of metric that can be incremented (it's a histogram)
     InvalidIncrement {
+        /// The type of metric we attempted to increment.
         ty: MetricType,
     },
     /// The metric is not a type of metric that can be decremented
     /// (it's either a histogram or a counter)
     InvalidDecrement {
+        /// The type of metric we attempted to decrement
         ty: MetricType,
     },
     /// Tried to perform an operation that expected one type but
     /// instead we got another type.
     WrongType {
+        /// The type of metric that we expected to find.
         expected: MetricType,
+        /// What was actually found.
         found: MetricType,
     },
 
@@ -52,42 +103,45 @@ pub enum MetricErrorData {
     __Nonexhaustive(Empty),
 }
 
+/// An error for when writing to a metric failed.
 #[derive(Copy, Clone, Debug)]
 pub struct MetricError<'m> {
+    /// The metric that was being written to.
     pub metric: &'m str,
+    /// Details on what exactly the problem was
     pub data: MetricErrorData,
 }
 
 impl<'m> MetricError<'m> {
-    pub fn invalid_unsigned(metric: &'m str, val: i64) -> Self {
+    pub(crate) fn invalid_unsigned(metric: &'m str, val: i64) -> Self {
         Self {
             metric,
             data: MetricErrorData::InvalidUnsignedValue(val),
         }
     }
 
-    pub fn invalid_signed(metric: &'m str, val: u64) -> Self {
+    pub(crate) fn invalid_signed(metric: &'m str, val: u64) -> Self {
         Self {
             metric,
             data: MetricErrorData::InvalidSignedValue(val),
         }
     }
 
-    pub fn invalid_increment(metric: &'m str, ty: MetricType) -> Self {
+    pub(crate) fn invalid_increment(metric: &'m str, ty: MetricType) -> Self {
         Self {
             metric,
             data: MetricErrorData::InvalidIncrement { ty },
         }
     }
 
-    pub fn invalid_decrement(metric: &'m str, ty: MetricType) -> Self {
+    pub(crate) fn invalid_decrement(metric: &'m str, ty: MetricType) -> Self {
         Self {
             metric,
             data: MetricErrorData::InvalidDecrement { ty },
         }
     }
 
-    pub fn wrong_type(metric: &'m str, expected: MetricType, found: MetricType) -> Self {
+    pub(crate) fn wrong_type(metric: &'m str, expected: MetricType, found: MetricType) -> Self {
         Self {
             metric,
             data: MetricErrorData::WrongType { expected, found },

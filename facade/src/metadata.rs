@@ -2,6 +2,7 @@ use std::ops::Index;
 
 const EMPTY_ARRAY: &[(&str, &str)] = &[];
 
+/// A static map of key-value pairs.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Metadata {
     attributes: &'static [(&'static str, &'static str)],
@@ -14,10 +15,12 @@ impl Metadata {
         Self { attributes }
     }
 
+    /// Get an iterator over the key-value pairs stored in this `Metadata` instance.
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, &'static str)> {
         self.attributes.iter().copied()
     }
 
+    /// Get the value for the metadata key.
     pub fn get(&self, val: &str) -> Option<&'static str> {
         // TODO(sean): If we can guarantee that the attributes
         //  are always sorted then we can use a binary search

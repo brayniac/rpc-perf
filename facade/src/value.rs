@@ -1,3 +1,15 @@
+
+/// A value that can be recorded into a metric.
+///
+/// You shouldn't have to deal with this in most
+/// code. It is used by this library to accept a
+/// wider variety of types.
+/// 
+/// However, if you want to make your type something
+/// that can be natively accepted by this metrics
+/// library, implement `From` or `Into<MetricsValue>`
+/// for your type.
+#[allow(missing_docs)]
 #[derive(Copy, Clone, Debug)]
 pub enum MetricValue {
     Signed(i64),
@@ -5,6 +17,8 @@ pub enum MetricValue {
 }
 
 impl MetricValue {
+    /// Get this value as a `u64` if it can be
+    /// converted losslessly.
     #[inline]
     pub fn as_u64(self) -> Option<u64> {
         match self {
@@ -14,6 +28,8 @@ impl MetricValue {
         }
     }
 
+    /// Get this value as a `i64` if it can be
+    /// converted losslessly.
     #[inline]
     pub fn as_i64(self) -> Option<i64> {
         match self {
@@ -23,6 +39,7 @@ impl MetricValue {
         }
     }
 
+    /// Convert this value to a `u64`.
     #[inline]
     pub fn as_u64_unchecked(self) -> u64 {
         match self {
@@ -31,6 +48,7 @@ impl MetricValue {
         }
     }
 
+    /// Convert this value to an `i64`.
     #[inline]
     pub fn as_i64_unchecked(self) -> i64 {
         match self {

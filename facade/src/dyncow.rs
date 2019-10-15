@@ -4,16 +4,36 @@ use evmap::ShallowCopy;
 
 use crate::{Counter, Gauge, Histogram};
 
+/// Analog to [`Cow`][stdcow] but for specific trait
+/// objects.
+/// 
+/// This allows for either storing a dynamic reference
+/// to a trait or a boxed trait. However, it doesn't
+/// support most of the options that [`Cow`][stdcow]
+/// supports since we are unable to promote a dyn
+/// trait reference to a boxed trait.
+/// 
+/// [stdcow]: std::borrow::Cow
 pub enum DynCow<'a, T: ?Sized> {
+    /// A reference to a T
     Borrowed(&'a T),
+    /// An owned box containing a T
     Owned(Box<T>),
 }
 
 impl<'a, T: ?Sized> DynCow<'a, T> {
+    /// Create a `DynCow` from a pointer.
+    /// 
+    /// # Safety
+    /// For this to be safe `ptr` must be a pointer
+    /// to a valid instance of a `T` and it must
+    /// outlive the resulting `DynCow` instance.
     pub unsafe fn from_ptr(ptr: *const T) -> Self {
         Self::Borrowed(&*ptr)
     }
 
+    /// Get a pointer pointing to the instance stored
+    /// within this `DynCow`.
     pub fn as_ptr(&self) -> *const T {
         &**self as *const T
     }

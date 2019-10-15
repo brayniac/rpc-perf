@@ -4,7 +4,7 @@ use std::mem;
 
 use crate::{
     register_counter, register_gauge, register_histogram, unregister_metric, Counter, Gauge,
-    Histogram, Metadata, Metric, RegisterError,
+    Histogram, Metadata, MetricCommon, RegisterError,
 };
 
 /// A metric with a non-static lifetime.
@@ -18,12 +18,13 @@ use crate::{
 /// recorded to this metric will use a dangling reference.
 ///
 /// For this reason, all constructors on this type are `unsafe`.
-pub struct ScopedMetric<'m, M: Metric> {
+pub struct ScopedMetric<'m, M: MetricCommon> {
     marker: PhantomData<&'m M>,
     name: Cow<'static, str>,
 }
 
 impl<'m, M: Counter> ScopedMetric<'m, M> {
+    /// Create a scoped counter from an existing counter reference.
     pub unsafe fn counter(
         name: impl Into<Cow<'static, str>>,
         metric: &'m M,
@@ -43,6 +44,7 @@ impl<'m, M: Counter> ScopedMetric<'m, M> {
 }
 
 impl<'m, M: Gauge> ScopedMetric<'m, M> {
+    /// Create a scoped gauge from an existing gauge reference.
     pub unsafe fn gauge(
         name: impl Into<Cow<'static, str>>,
         metric: &'m M,
@@ -62,6 +64,7 @@ impl<'m, M: Gauge> ScopedMetric<'m, M> {
 }
 
 impl<'m, M: Histogram> ScopedMetric<'m, M> {
+    /// Create a scoped histogram from an existing histogram reference.
     pub unsafe fn histogram(
         name: impl Into<Cow<'static, str>>,
         metric: &'m M,
@@ -80,7 +83,7 @@ impl<'m, M: Histogram> ScopedMetric<'m, M> {
     }
 }
 
-impl<'m, M: Metric> Drop for ScopedMetric<'m, M> {
+impl<'m, M: MetricCommon> Drop for ScopedMetric<'m, M> {
     fn drop(&mut self) {
         let _ = unregister_metric(&self.name);
     }

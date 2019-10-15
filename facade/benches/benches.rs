@@ -20,7 +20,7 @@ impl AtomicCounter {
     }
 }
 
-impl Metric for AtomicCounter {}
+impl MetricCommon for AtomicCounter {}
 
 impl Counter for AtomicCounter {
     fn store(&self, _: Instant, val: u64) {
@@ -37,7 +37,7 @@ impl Counter for AtomicCounter {
 
 struct Noop;
 
-impl Metric for Noop {}
+impl MetricCommon for Noop {}
 impl Counter for Noop {
     fn store(&self, _: Instant, _: u64) {}
     fn load(&self) -> u64 {

@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::Instant;
 
 /// Methods common to all metrics.
-pub trait Metric: Send + Sync {
+pub trait MetricCommon: Send + Sync {
     /// Get the current metric as a pointer to a
     /// type implementing `Any`.
     fn as_any(&self) -> Option<&dyn Any> {
@@ -19,10 +19,13 @@ pub trait Metric: Send + Sync {
 /// Counters should be used when counting something.
 /// (e.g. the total number of hits on a web endpoint, the
 /// number of times that a function has run, etc.)
-pub trait Counter: Metric {
+pub trait Counter: MetricCommon {
+    /// Set the value of the counter.
     fn store(&self, time: Instant, value: u64);
+    /// Add a value to the counter.
     fn add(&self, time: Instant, amount: u64);
 
+    /// Get the current value of the counter.
     fn load(&self) -> u64;
 }
 
@@ -34,18 +37,23 @@ pub trait Counter: Metric {
 /// Gauges measure the instantaneous value of some
 /// property. (e.g. number of requests currently in flight,
 /// current CPU usage, memory usage, etc.)
-pub trait Gauge: Metric {
+pub trait Gauge: MetricCommon {
+    /// Store a value into the gauge.
     fn store(&self, time: Instant, value: i64);
+    /// Add a value to the gauge.
     fn add(&self, time: Instant, amount: i64);
+    /// Subtract a value from the gauge.
     fn sub(&self, time: Instant, amount: i64);
 
+    /// Get the current value of the gauge.
     fn load(&self) -> u64;
 }
 
 /// A histogram, records values and calculates some sort of summary.
 ///
 /// This is the most flexible of all the metric types.
-pub trait Histogram: Metric {
+pub trait Histogram: MetricCommon {
+    /// Record `count` instances of `val` into the histogram.
     fn increment(&self, time: Instant, val: u64, count: u64);
 
     // TODO: Get buckets somehow

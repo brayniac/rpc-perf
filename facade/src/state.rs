@@ -9,8 +9,8 @@ use once_cell::sync::Lazy;
 use thread_local::CachedThreadLocal;
 
 use crate::{
-    Instant, Metadata, MetricError, MetricInstance, MetricType, MetricVal as MetricInner,
-    MetricValue, RegisterError, UnregisterError,
+    Instant, Metadata, Metric, MetricError, MetricInstance, MetricType, MetricValue, RegisterError,
+    UnregisterError,
 };
 
 #[derive(Clone)]
@@ -91,7 +91,7 @@ impl State {
     pub(crate) fn register_metric(
         &self,
         name: Cow<'static, str>,
-        metric: MetricInner,
+        metric: Metric,
         metadata: Metadata,
     ) -> Result<(), RegisterError> {
         let mut writer = self.writer.lock().unwrap();
@@ -160,18 +160,18 @@ impl State {
         let reader = self.reader();
 
         reader.get_and(name, |val| match val[0].metric() {
-            MetricInner::Counter(counter) => match value.as_u64() {
+            Metric::Counter(counter) => match value.as_u64() {
                 Some(val) => counter.store(time, val),
                 _ => self.error(MetricError::invalid_unsigned(
                     name,
                     value.as_i64_unchecked(),
                 )),
             },
-            MetricInner::Gauge(gauge) => match value.as_i64() {
+            Metric::Gauge(gauge) => match value.as_i64() {
                 Some(val) => gauge.store(time, val),
                 _ => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
-            MetricInner::Histogram(histogram) => match value.as_u64() {
+            Metric::Histogram(histogram) => match value.as_u64() {
                 Some(val) => histogram.increment(time, val, count),
                 _ => self.error(MetricError::invalid_unsigned(
                     name,
@@ -185,18 +185,18 @@ impl State {
         let reader = self.reader();
 
         reader.get_and(name, |val| match val[0].metric() {
-            MetricInner::Counter(counter) => match value.as_u64() {
+            Metric::Counter(counter) => match value.as_u64() {
                 Some(val) => counter.add(time, val),
                 None => self.error(MetricError::invalid_unsigned(
                     name,
                     value.as_i64_unchecked(),
                 )),
             },
-            MetricInner::Gauge(gauge) => match value.as_i64() {
+            Metric::Gauge(gauge) => match value.as_i64() {
                 Some(val) => gauge.add(time, val),
                 None => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
-            MetricInner::Histogram(_) => {
+            Metric::Histogram(_) => {
                 self.error(MetricError::invalid_increment(name, MetricType::Histogram))
             }
         });
@@ -206,7 +206,7 @@ impl State {
         let reader = self.reader();
 
         reader.get_and(name, |val| match val[0].metric() {
-            MetricInner::Gauge(gauge) => match value.as_i64() {
+            Metric::Gauge(gauge) => match value.as_i64() {
                 Some(val) => gauge.sub(time, val),
                 None => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
@@ -218,7 +218,7 @@ impl State {
         let reader = self.reader();
 
         reader.get_and(name, |val| match val[0].metric() {
-            MetricInner::Counter(counter) => counter.store(time, value),
+            Metric::Counter(counter) => counter.store(time, value),
             metric => self.error(MetricError::wrong_type(
                 name,
                 MetricType::Counter,
@@ -231,7 +231,7 @@ impl State {
         let reader = self.reader();
 
         reader.get_and(name, |val| match val[0].metric() {
-            MetricInner::Gauge(gauge) => gauge.store(time, value),
+            Metric::Gauge(gauge) => gauge.store(time, value),
             metric => self.error(MetricError::wrong_type(
                 name,
                 MetricType::Gauge,
