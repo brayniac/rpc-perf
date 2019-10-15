@@ -269,3 +269,13 @@ macro_rules! metadata {
         ])
     };
 }
+
+/// Create a percentile from a float.
+///
+/// This corresponds to calling `Percentile::from_float`.
+#[macro_export]
+macro_rules! percentile {
+    ( $p:expr ) => {
+        $crate::Percentile::from_float($p)
+    };
+}
