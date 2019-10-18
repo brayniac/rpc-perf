@@ -1,5 +1,5 @@
 [package]
-name = "facade"
+name = "metrics-core"
 version = "0.1.0"
 authors = ["Sean Lynch <slynch@twitter.com>"]
 edition = "2018"

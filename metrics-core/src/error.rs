@@ -14,10 +14,11 @@ pub enum Empty {}
 /// to match exhaustively, that can be done by matching
 /// the final variant like this
 /// ```rust
-/// # let data = MetricErrorData::InvalidUnsignedValue(0);
+/// # use metrics_core::*;
+/// # let data = RegisterError::MetricAlreadyExists;
 /// match data {
 ///     // ...
-///     __Nonexhaustive(empty) => match empty { },
+///     RegisterError::__Nonexhaustive(empty) => match empty { },
 /// #   _ => ()
 /// }
 /// ```
@@ -39,10 +40,11 @@ pub enum RegisterError {
 /// to match exhaustively, that can be done by matching
 /// the final variant like this
 /// ```rust
-/// # let data = MetricErrorData::InvalidUnsignedValue(0);
+/// # use metrics_core::*;
+/// # let data = UnregisterError::NoSuchMetric;
 /// match data {
 ///     // ...
-///     __Nonexhaustive(empty) => match empty { },
+///     UnregisterError::__Nonexhaustive(empty) => match empty { },
 /// #   _ => ()
 /// }
 /// ```
@@ -64,10 +66,11 @@ pub enum UnregisterError {
 /// to match exhaustively, that can be done by matching
 /// the final variant like this
 /// ```rust
+/// # use metrics_core::*;
 /// # let data = MetricErrorData::InvalidUnsignedValue(0);
 /// match data {
 ///     // ...
-///     __Nonexhaustive(empty) => match empty { },
+///     MetricErrorData::__Nonexhaustive(empty) => match empty { },
 /// #   _ => ()
 /// }
 /// ```

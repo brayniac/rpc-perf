@@ -1,4 +1,4 @@
-use facade::*;
+use metrics_core::*;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 

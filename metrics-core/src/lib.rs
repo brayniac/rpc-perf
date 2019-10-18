@@ -33,11 +33,12 @@
 //!
 //! # Example
 //! ```rust
-//! # use facade::*;
+//! # use metrics_core::*;
 //! # struct Metric;
-//! # impl facade::Metric for Metric {}
+//! # impl MetricCommon for Metric {}
 //! # impl Summary for Metric {
-//! #   fn increment(&self, time: Instant, val: u64, count: u64) {}
+//! #   fn record(&self, time: Instant, val: u64, count: u64) {}
+//! #   fn submetrics(&self) -> Vec<SubMetric> { vec![] }
 //! # }
 //! # fn function_that_takes_some_time() {}
 //! // Create a metric named "example.metric" with no associated metadata
@@ -109,7 +110,7 @@ mod traits;
 mod value;
 
 pub use crate::dyncow::DynCow;
-pub use crate::error::{MetricError, RegisterError, UnregisterError};
+pub use crate::error::{MetricError, RegisterError, UnregisterError, MetricErrorData};
 pub use crate::inner::{Metric, MetricInstance, MetricType};
 pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
