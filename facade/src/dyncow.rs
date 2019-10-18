@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use evmap::ShallowCopy;
 
-use crate::{Counter, Gauge, Histogram};
+use crate::{Counter, Gauge, Summary};
 
 /// Analog to [`Cow`][stdcow] but for specific trait
 /// objects.
@@ -56,9 +56,9 @@ impl<'a, T: ?Sized> From<&'a T> for DynCow<'a, T> {
     }
 }
 
-impl<'a, H> From<Box<H>> for DynCow<'a, dyn Histogram + 'a>
+impl<'a, H> From<Box<H>> for DynCow<'a, dyn Summary + 'a>
 where
-    H: Histogram + 'a,
+    H: Summary + 'a,
 {
     fn from(val: Box<H>) -> Self {
         Self::Owned(val)
@@ -83,9 +83,9 @@ where
     }
 }
 
-impl<'a, H> From<&'a H> for DynCow<'a, dyn Histogram + 'a>
+impl<'a, H> From<&'a H> for DynCow<'a, dyn Summary + 'a>
 where
-    H: Histogram + 'a,
+    H: Summary + 'a,
 {
     fn from(val: &'a H) -> Self {
         Self::Borrowed(val)

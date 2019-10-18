@@ -2,7 +2,7 @@ use std::any::Any;
 
 use evmap::ShallowCopy;
 
-use crate::{Counter, DynCow, Gauge, Histogram, Metadata, MetricCommon};
+use crate::{Counter, DynCow, Gauge, Metadata, MetricCommon, Summary};
 
 /// The type of a metric.
 ///
@@ -15,7 +15,7 @@ use crate::{Counter, DynCow, Gauge, Histogram, Metadata, MetricCommon};
 pub enum MetricType {
     Counter,
     Gauge,
-    Histogram,
+    Summary,
 }
 
 impl std::fmt::Display for MetricType {
@@ -23,7 +23,7 @@ impl std::fmt::Display for MetricType {
         match self {
             Self::Counter => write!(fmt, "counter"),
             Self::Gauge => write!(fmt, "gauge"),
-            Self::Histogram => write!(fmt, "histogram"),
+            Self::Summary => write!(fmt, "summary"),
         }
     }
 }
@@ -34,7 +34,7 @@ impl std::fmt::Display for MetricType {
 pub enum Metric {
     Counter(DynCow<'static, dyn Counter>),
     Gauge(DynCow<'static, dyn Gauge>),
-    Histogram(DynCow<'static, dyn Histogram>),
+    Summary(DynCow<'static, dyn Summary>),
 }
 
 impl Metric {
@@ -43,7 +43,7 @@ impl Metric {
         match self {
             Self::Counter(_) => MetricType::Counter,
             Self::Gauge(_) => MetricType::Gauge,
-            Self::Histogram(_) => MetricType::Histogram,
+            Self::Summary(_) => MetricType::Summary,
         }
     }
 }
@@ -99,10 +99,10 @@ impl MetricInstance {
         }
     }
 
-    /// If this type is a histogram, get a reference to that histogram.
-    pub fn as_histogram(&self) -> Option<&dyn Histogram> {
+    /// If this type is a summary, get a reference to that summary.
+    pub fn as_summary(&self) -> Option<&dyn Summary> {
         match self.metric() {
-            Metric::Histogram(h) => Some(&**h),
+            Metric::Summary(h) => Some(&**h),
             _ => None,
         }
     }
@@ -113,7 +113,7 @@ impl MetricCommon for Metric {
         match self {
             Self::Counter(c) => c.as_any(),
             Self::Gauge(g) => g.as_any(),
-            Self::Histogram(h) => h.as_any(),
+            Self::Summary(h) => h.as_any(),
         }
     }
 }
@@ -132,7 +132,7 @@ impl ShallowCopy for Metric {
         match self {
             Self::Counter(x) => Self::Counter(x.shallow_copy()),
             Self::Gauge(x) => Self::Gauge(x.shallow_copy()),
-            Self::Histogram(x) => Self::Histogram(x.shallow_copy()),
+            Self::Summary(x) => Self::Summary(x.shallow_copy()),
         }
     }
 }

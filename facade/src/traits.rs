@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::Instant;
+use crate::{Instant, SubMetric};
 
 /// Methods common to all metrics.
 pub trait MetricCommon: Send + Sync {
@@ -49,12 +49,11 @@ pub trait Gauge: MetricCommon {
     fn load(&self) -> u64;
 }
 
-/// A histogram, records values and calculates some sort of summary.
-///
-/// This is the most flexible of all the metric types.
-pub trait Histogram: MetricCommon {
-    /// Record `count` instances of `val` into the histogram.
-    fn increment(&self, time: Instant, val: u64, count: u64);
+/// Any sort of summary of the record values
+pub trait Summary: MetricCommon {
+    /// Record `count` instances of `val`.
+    fn record(&self, time: Instant, val: u64, count: u64);
 
-    // TODO: Get buckets somehow
+    /// Get all statistics exposed by the implementation
+    fn submetrics(&self) -> Vec<SubMetric>;
 }

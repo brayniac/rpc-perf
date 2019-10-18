@@ -6,9 +6,9 @@
 //! backends.
 //!
 //! Metrics types should implement one of [`Counter`][counter],
-//! [`Gauge`][gauge], or [`Histogram`][histogram]. Then they
+//! [`Gauge`][gauge], or [`Summary`][summary]. Then they
 //! can be registered through one of [`register_counter`][rctr],
-//! [`register_gauge`][rgauge], or [`register_histogram`][rhist]
+//! [`register_gauge`][rgauge], or [`register_summary`][rhist]
 //! functions.
 //!
 //! # Metadata
@@ -36,15 +36,15 @@
 //! # use facade::*;
 //! # struct Metric;
 //! # impl facade::Metric for Metric {}
-//! # impl Histogram for Metric {
+//! # impl Summary for Metric {
 //! #   fn increment(&self, time: Instant, val: u64, count: u64) {}
 //! # }
 //! # fn function_that_takes_some_time() {}
 //! // Create a metric named "example.metric" with no associated metadata
-//! register_histogram("example.metric", Box::new(Metric), Metadata::empty());
+//! register_summary("example.metric", Box::new(Metric), Metadata::empty());
 //!
 //! // Alternatively, we can add metadata using the metadata! macro.
-//! register_histogram(
+//! register_summary(
 //!     "example.metadata",
 //!     Box::new(Metric),
 //!     metadata! {
@@ -55,7 +55,7 @@
 //!
 //! // If you have a static reference to a metric, then you can avoid boxing it
 //! static METRIC_INSTANCE: Metric = Metric;
-//! register_histogram(
+//! register_summary(
 //!     "example.static",
 //!     &METRIC_INSTANCE,
 //!     Metadata::empty()
@@ -68,7 +68,7 @@
 //! value!("example.metric", 11);
 //!
 //! // Record a value and a count, note that the count
-//! // is only used by histograms.
+//! // is only used by summarys.
 //! value!("example.static", 120, 44);
 //!
 //! // Can also record timings
@@ -81,13 +81,13 @@
 //!
 //! [counter]: crate::Counter
 //! [gauge]: crate::Gauge
-//! [histogram]: crate::Histogram
+//! [summary]: crate::Summary
 //! [rctr]: crate::register_counter
 //! [rgauge]: crate::register_gauge
-//! [rhist]: crate::register_histogram
+//! [rhist]: crate::register_summary
 //! [for_each_metric]: crate::for_each_metric
 
-#![warn(intra_doc_link_resolution_failure, missing_docs)]
+#![warn(intra_doc_link_resolution_failure)] //, missing_docs)]
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -104,6 +104,7 @@ mod metadata;
 mod percentile;
 mod scoped;
 mod state;
+mod submetric;
 mod traits;
 mod value;
 
@@ -114,7 +115,8 @@ pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
 pub use crate::percentile::Percentile;
 pub use crate::scoped::ScopedMetric;
-pub use crate::traits::{Counter, Gauge, Histogram, MetricCommon};
+pub use crate::submetric::{SubMetric, SubMetricValue};
+pub use crate::traits::{Counter, Gauge, MetricCommon, Summary};
 pub use crate::value::MetricValue;
 
 use std::borrow::Cow;
@@ -145,16 +147,16 @@ pub fn register_gauge(
     State::get_force().register_metric(name.into(), Metric::Gauge(gauge.into()), metadata)
 }
 
-/// Register a new histogram.
+/// Register a new summary.
 ///
 /// If a metric has already been registered under the
 /// same name, then it will return an error.
-pub fn register_histogram(
+pub fn register_summary(
     name: impl Into<Cow<'static, str>>,
-    histogram: impl Into<DynCow<'static, dyn Histogram>>,
+    summary: impl Into<DynCow<'static, dyn Summary>>,
     metadata: Metadata,
 ) -> Result<(), RegisterError> {
-    State::get_force().register_metric(name.into(), Metric::Histogram(histogram.into()), metadata)
+    State::get_force().register_metric(name.into(), Metric::Summary(summary.into()), metadata)
 }
 
 /// Unregister an existing metric.

@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use std::mem;
 
 use crate::{
-    register_counter, register_gauge, register_histogram, unregister_metric, Counter, Gauge,
-    Histogram, Metadata, MetricCommon, RegisterError,
+    register_counter, register_gauge, register_summary, unregister_metric, Counter, Gauge,
+    Metadata, MetricCommon, RegisterError, Summary,
 };
 
 /// A metric with a non-static lifetime.
@@ -63,18 +63,18 @@ impl<'m, M: Gauge> ScopedMetric<'m, M> {
     }
 }
 
-impl<'m, M: Histogram> ScopedMetric<'m, M> {
-    /// Create a scoped histogram from an existing histogram reference.
-    pub unsafe fn histogram(
+impl<'m, M: Summary> ScopedMetric<'m, M> {
+    /// Create a scoped summary from an existing summary reference.
+    pub unsafe fn summary(
         name: impl Into<Cow<'static, str>>,
         metric: &'m M,
         metadata: impl Into<Option<Metadata>>,
     ) -> Result<Self, RegisterError> {
-        let static_metric: &'static dyn Histogram = mem::transmute(metric as &dyn Histogram);
+        let static_metric: &'static dyn Summary = mem::transmute(metric as &dyn Summary);
         let metadata = metadata.into().unwrap_or(Metadata::empty());
         let name = name.into();
 
-        register_histogram(name.clone(), static_metric, metadata)?;
+        register_summary(name.clone(), static_metric, metadata)?;
 
         Ok(Self {
             marker: PhantomData,

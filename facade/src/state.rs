@@ -171,8 +171,8 @@ impl State {
                 Some(val) => gauge.store(time, val),
                 _ => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
-            Metric::Histogram(histogram) => match value.as_u64() {
-                Some(val) => histogram.increment(time, val, count),
+            Metric::Summary(histogram) => match value.as_u64() {
+                Some(val) => histogram.record(time, val, count),
                 _ => self.error(MetricError::invalid_unsigned(
                     name,
                     value.as_i64_unchecked(),
@@ -196,8 +196,8 @@ impl State {
                 Some(val) => gauge.add(time, val),
                 None => self.error(MetricError::invalid_signed(name, value.as_u64_unchecked())),
             },
-            Metric::Histogram(_) => {
-                self.error(MetricError::invalid_increment(name, MetricType::Histogram))
+            Metric::Summary(_) => {
+                self.error(MetricError::invalid_increment(name, MetricType::Summary))
             }
         });
     }
