@@ -110,7 +110,7 @@ mod traits;
 mod value;
 
 pub use crate::dyncow::DynCow;
-pub use crate::error::{MetricError, RegisterError, UnregisterError, MetricErrorData};
+pub use crate::error::{MetricError, MetricErrorData, RegisterError, UnregisterError};
 pub use crate::inner::{Metric, MetricInstance, MetricType};
 pub use crate::instant::{Instant, Interval};
 pub use crate::metadata::Metadata;
