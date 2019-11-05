@@ -27,11 +27,8 @@ pub trait Counter: MetricCommon {
     /// Set the value of the counter.
     fn store(&self, time: Instant, value: u64);
 
-    // TODO: we may want to rename 'amount' -> 'value' to be consistent with
-    // naming from std::sync::atomics
-
     /// Add a value to the counter.
-    fn add(&self, time: Instant, amount: u64);
+    fn add(&self, time: Instant, value: u64);
 
     /// Get the current value of the counter.
     fn load(&self) -> u64;
@@ -48,14 +45,11 @@ pub trait Gauge: MetricCommon {
     /// Store a value into the gauge.
     fn store(&self, time: Instant, value: i64);
 
-    // TODO: we may want to rename 'amount' -> 'value' to be consistent with
-    // naming from std::sync::atomics
-
     /// Add a value to the gauge.
-    fn add(&self, time: Instant, amount: i64);
+    fn add(&self, time: Instant, value: i64);
 
     /// Subtract a value from the gauge.
-    fn sub(&self, time: Instant, amount: i64);
+    fn sub(&self, time: Instant, value: i64);
 
     /// Get the current value of the gauge.
     fn load(&self) -> u64;
@@ -63,10 +57,8 @@ pub trait Gauge: MetricCommon {
 
 /// Any sort of summary of the record values
 pub trait Summary: MetricCommon {
-    // TODO: function parameters for record are inconsistent with other traits
-
     /// Record `count` instances of `val`.
-    fn record(&self, time: Instant, val: u64, count: u64);
+    fn record(&self, time: Instant, value: u64, count: u64);
 
     // TODO: we should consider alternate design here. It's more likely that
     // we'd want to get some preset group of submetrics (eg: particular
