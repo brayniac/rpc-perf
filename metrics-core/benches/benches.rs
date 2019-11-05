@@ -30,6 +30,7 @@ impl Counter for AtomicCounter {
     fn store(&self, _: Instant, val: u64) {
         self.ctr.store(val, Ordering::Relaxed);
     }
+
     fn load(&self) -> u64 {
         self.ctr.load(Ordering::Relaxed)
     }

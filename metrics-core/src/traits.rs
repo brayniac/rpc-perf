@@ -14,6 +14,8 @@ pub trait MetricCommon: Send + Sync {
     }
 }
 
+// TODO: consider making these generic in terms of primitive type.
+
 /// A counter. Counts things.
 ///
 /// This trait should be implemented by any type that should be used as a
@@ -24,6 +26,10 @@ pub trait MetricCommon: Send + Sync {
 pub trait Counter: MetricCommon {
     /// Set the value of the counter.
     fn store(&self, time: Instant, value: u64);
+
+    // TODO: we may want to rename 'amount' -> 'value' to be consistent with
+    // naming from std::sync::atomics
+
     /// Add a value to the counter.
     fn add(&self, time: Instant, amount: u64);
 
@@ -31,7 +37,7 @@ pub trait Counter: MetricCommon {
     fn load(&self) -> u64;
 }
 
-/// A gauge. Measures the instananeous value of some property.
+/// A gauge. Measures the instantaneous value of some property.
 ///
 /// This trait should be implemented by any type that can be used as a gauge
 /// metric.
@@ -41,8 +47,13 @@ pub trait Counter: MetricCommon {
 pub trait Gauge: MetricCommon {
     /// Store a value into the gauge.
     fn store(&self, time: Instant, value: i64);
+
+    // TODO: we may want to rename 'amount' -> 'value' to be consistent with
+    // naming from std::sync::atomics
+
     /// Add a value to the gauge.
     fn add(&self, time: Instant, amount: i64);
+
     /// Subtract a value from the gauge.
     fn sub(&self, time: Instant, amount: i64);
 
@@ -52,8 +63,15 @@ pub trait Gauge: MetricCommon {
 
 /// Any sort of summary of the record values
 pub trait Summary: MetricCommon {
+    // TODO: function parameters for record are inconsistent with other traits
+
     /// Record `count` instances of `val`.
     fn record(&self, time: Instant, val: u64, count: u64);
+
+    // TODO: we should consider alternate design here. It's more likely that
+    // we'd want to get some preset group of submetrics (eg: particular
+    // quantiles) it's unclear how we'd tell the implementation about those in
+    // the current form.
 
     /// Get all statistics exposed by the implementation
     fn submetrics(&self) -> Vec<SubMetric>;

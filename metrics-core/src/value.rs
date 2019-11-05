@@ -18,8 +18,7 @@ pub enum MetricValue {
 }
 
 impl MetricValue {
-    /// Get this value as a `u64` if it can be
-    /// converted losslessly.
+    /// Get this value as a `u64` if it can be converted losslessly.
     #[inline]
     pub fn as_u64(self) -> Option<u64> {
         match self {
@@ -29,8 +28,7 @@ impl MetricValue {
         }
     }
 
-    /// Get this value as a `i64` if it can be
-    /// converted losslessly.
+    /// Get this value as a `i64` if it can be converted losslessly.
     #[inline]
     pub fn as_i64(self) -> Option<i64> {
         match self {

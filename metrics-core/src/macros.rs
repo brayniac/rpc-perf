@@ -122,9 +122,9 @@ macro_rules! gauge {
     };
 }
 
-/// TODO: we may need another macro for recording non time-interval data into
-/// summary types. Use case would be for inserting bucketized counts into the
-/// metrics library.
+// TODO: we may need another macro for recording non time-interval data into
+// summary types. Use case would be for inserting bucketized counts into the
+// metrics library.
 
 /// Record a timing interval.
 ///
@@ -218,6 +218,9 @@ macro_rules! register_gauge {
         )
     }
 }
+
+// TODO: do we need a specific macro to register other summary types? Would it
+// be one per type?
 
 /// Register a new histogram.
 #[macro_export]
