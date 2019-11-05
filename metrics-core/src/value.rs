@@ -1,12 +1,14 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 /// A value that can be recorded into a metric.
 ///
-/// You shouldn't have to deal with this in most
-/// code. It is used by this library to accept a
-/// wider variety of types.
+/// You shouldn't have to deal with this in most code. It is used by this
+/// library to accept a wider variety of types.
 ///
-/// However, if you want to make your type something
-/// that can be natively accepted by this metrics
-/// library, implement `From` or `Into<MetricsValue>`
+/// However, if you want to make your type something that can be natively
+/// accepted by this metrics library, implement `From` or `Into<MetricsValue>`
 /// for your type.
 #[allow(missing_docs)]
 #[derive(Copy, Clone, Debug)]

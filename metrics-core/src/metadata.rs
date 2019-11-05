@@ -1,3 +1,7 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use std::ops::Index;
 
 const EMPTY_ARRAY: &[(&str, &str)] = &[];
@@ -9,22 +13,22 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    // Note: This is not public since in the future we may
-    //   want to enforce that these are sorted
+    // Note: This is not public since in the future we may want to enforce that
+    // these are sorted
     pub(crate) fn new(attributes: &'static [(&'static str, &'static str)]) -> Self {
         Self { attributes }
     }
 
-    /// Get an iterator over the key-value pairs stored in this `Metadata` instance.
+    /// Get an iterator over the key-value pairs stored in this `Metadata`
+    /// instance.
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, &'static str)> {
         self.attributes.iter().copied()
     }
 
     /// Get the value for the metadata key.
     pub fn get(&self, val: &str) -> Option<&'static str> {
-        // TODO(sean): If we can guarantee that the attributes
-        //  are always sorted then we can use a binary search
-        //  here instead.
+        // TODO(sean): If we can guarantee that the attributes are always sorted
+        // then we can use a binary search here instead.
         for (k, v) in self.iter() {
             if k == val {
                 return Some(v);

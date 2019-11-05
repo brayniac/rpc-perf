@@ -1,3 +1,7 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use std::borrow::Cow;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -64,14 +68,11 @@ impl State {
         self.tls.get_or(|| self.factory.handle())
     }
 
-    /// Get the state if it has been initialized
-    /// otherwise just return None.
+    /// Get the state if it has been initialized otherwise just return None.
     ///
-    /// This is useful for cases where we wouldn't
-    /// do anything with an empty state anyways.
-    /// (specifically, recording a value to a metric.
-    /// If the state hasn't been set up then the
-    /// metric definitely doesn't exist.)
+    /// This is useful for cases where we wouldn't do anything with an empty
+    /// state anyways. (specifically, recording a value to a metric. If the
+    /// state hasn't been set up then the metric definitely doesn't exist.)
     #[inline]
     pub(crate) fn get() -> Option<&'static Self> {
         if INITIALIZED.load(Ordering::Relaxed) {
@@ -87,7 +88,8 @@ impl State {
         &*STATE
     }
 
-    /// Register a new metric, returns whether the metric was registered succesfully
+    /// Register a new metric, returns whether the metric was registered
+    /// successfully
     pub(crate) fn register_metric(
         &self,
         name: Cow<'static, str>,

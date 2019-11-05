@@ -1,18 +1,21 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 /// Record a value to a metric.
 ///
-/// For counters and gauges this should directly set the value of
-/// the metric, for histograms it will get rolled into a summary.
+/// For counters and gauges this should directly set the value of the metric,
+/// for histograms it will get rolled into a summary.
 ///
 /// The required parameters for this macro are
 /// - `name`: a string literal with the name of the metric
 /// - `value`: the value to be recorded
 ///
 /// Optional parameters
-/// - `count`: The number of times the value should be registered.
-///     This is ignored for counters and gauges. If not given, this
-///     defaults to 1.
-/// - `time`: The time at which the value was recorded, given as `time = <expr>`.
-///     If not given then defaults to the current time.
+/// - `count`: The number of times the value should be registered. This is
+///     ignored for counters and gauges. If not given, this defaults to 1.
+/// - `time`: The time at which the value was recorded, given as
+///     `time = <expr>`. If not given then defaults to the current time.
 #[macro_export]
 macro_rules! value {
     ($name:literal, $value:expr) => {
@@ -31,18 +34,18 @@ macro_rules! value {
 
 /// Increment a counter or gauge.
 ///
-/// If the metric is a counter or a gauge then it will increment the
-/// stored value within the metric. If the provided metric is not a
-/// histogram, then it will call the user-provided error function.
+/// If the metric is a counter or a gauge then it will increment the stored
+/// value within the metric. If the provided metric is not a histogram, then it
+/// will call the user-provided error function.
 ///
 /// The the only required parameter for this macro is
 /// - `name`: a string literal with the name of the metric.
 ///
 /// Optional Paramters
-/// - `value`: the amount by which to increment the counter/gauge.
-///     If not specified this defaults to `1`.
-/// - `time`: The time at which the increment happened. If not specified
-///     this defaults to the current time. Specified like `time = <expr>`.
+/// - `value`: the amount by which to increment the counter/gauge. If not
+///     specified this defaults to `1`.
+/// - `time`: The time at which the increment happened. If not specified this
+///     defaults to the current time. Specified like `time = <expr>`.
 #[macro_export]
 macro_rules! increment {
     ($name:literal) => {
@@ -58,9 +61,9 @@ macro_rules! increment {
 
 /// Decrement a gauge.
 ///
-/// If the metric is a gauge then it will decrement the
-/// stored value within the metric. If the provided metric is not a
-/// histogram, then it will call the user-provided error function.
+/// If the metric is a gauge then it will decrement the stored value within the
+/// metric. If the provided metric is not a gauge, then it will call the
+/// user-provided error function.
 ///
 /// The the only required parameter for this macro is
 /// - `name`: a string literal with the name of the metric.
@@ -85,8 +88,8 @@ macro_rules! decrement {
 
 /// Set the value of a counter.
 ///
-/// If the metric is not a counter then it will call the
-/// user-defined error function.
+/// If the metric is not a counter then it will call the user-defined error
+/// function.
 ///
 /// ## Parameters
 /// - `name`: A string literal with the name of the metric.
@@ -103,8 +106,8 @@ macro_rules! counter {
 
 /// Set the value of a gauge.
 ///
-/// If the metric is not a gauge then it will call the
-/// user-defined error function.
+/// If the metric is not a gauge then it will call the user-defined error
+/// function.
 ///
 /// ## Parameters
 /// - `name`: A string literal with the name of the metric.
@@ -119,14 +122,16 @@ macro_rules! gauge {
     };
 }
 
+/// TODO: we may need another macro for recording non time-interval data into
+/// summary types. Use case would be for inserting bucketized counts into the
+/// metrics library.
+
 /// Record a timing interval.
 ///
-/// This is equivalent to calling `value!` with the
-/// interval.
+/// This is equivalent to calling `value!` with the interval.
 ///
-/// This macro supports two argument formats. Either
-/// it takes the duration the interval or it takes a
-/// start and end time and uses that to calculate the
+/// This macro supports two argument formats. Either it takes the duration the
+/// interval or it takes a start and end time and uses that to calculate the
 /// interval duration.
 #[macro_export]
 macro_rules! interval {

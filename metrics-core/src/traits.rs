@@ -1,11 +1,14 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use std::any::Any;
 
 use crate::{Instant, SubMetric};
 
 /// Methods common to all metrics.
 pub trait MetricCommon: Send + Sync {
-    /// Get the current metric as a pointer to a
-    /// type implementing `Any`.
+    /// Get the current metric as a pointer to a type implementing `Any`.
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
@@ -13,12 +16,11 @@ pub trait MetricCommon: Send + Sync {
 
 /// A counter. Counts things.
 ///
-/// This trait should be implemented by any type that
-/// should be used as a counter metric.
+/// This trait should be implemented by any type that should be used as a
+/// counter metric.
 ///
-/// Counters should be used when counting something.
-/// (e.g. the total number of hits on a web endpoint, the
-/// number of times that a function has run, etc.)
+/// Counters should be used when counting something. (e.g. the total number of
+/// hits on a web endpoint, the number of times that a function has run, etc.)
 pub trait Counter: MetricCommon {
     /// Set the value of the counter.
     fn store(&self, time: Instant, value: u64);
@@ -31,12 +33,11 @@ pub trait Counter: MetricCommon {
 
 /// A gauge. Measures the instananeous value of some property.
 ///
-/// This trait should be implemented by any type that
-/// can be used as a gauge metric.
+/// This trait should be implemented by any type that can be used as a gauge
+/// metric.
 ///
-/// Gauges measure the instantaneous value of some
-/// property. (e.g. number of requests currently in flight,
-/// current CPU usage, memory usage, etc.)
+/// Gauges measure the instantaneous value of some property. (e.g. number of
+/// requests currently in flight, current CPU usage, memory usage, etc.)
 pub trait Gauge: MetricCommon {
     /// Store a value into the gauge.
     fn store(&self, time: Instant, value: i64);

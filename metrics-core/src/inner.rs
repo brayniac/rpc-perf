@@ -1,3 +1,7 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use std::any::Any;
 
 use evmap::ShallowCopy;
@@ -6,8 +10,8 @@ use crate::{Counter, DynCow, Gauge, Metadata, MetricCommon, Summary};
 
 /// The type of a metric.
 ///
-/// This is provided for convenience but usually
-/// you'll want to match on [`Metric`][metric].
+/// This is provided for convenience but usually you'll want to match on
+/// [`Metric`][metric].
 ///
 /// [metric]: crate::Metric
 #[allow(missing_docs)]

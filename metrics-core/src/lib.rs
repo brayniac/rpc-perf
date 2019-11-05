@@ -2,25 +2,23 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-//! Metrics facade that allows for using multiple metrics
-//! backends.
+//! Metrics facade that allows for using multiple metrics backends.
 //!
 //! Metrics types should implement one of [`Counter`][counter],
-//! [`Gauge`][gauge], or [`Summary`][summary]. Then they
-//! can be registered through one of [`register_counter`][rctr],
-//! [`register_gauge`][rgauge], or [`register_summary`][rhist]
-//! functions.
+//! [`Gauge`][gauge], or [`Summary`][summary]. Then they can be registered
+//! through one of [`register_counter`][rctr], [`register_gauge`][rgauge], or
+//! [`register_summary`][rhist] functions.
 //!
 //! # Metadata
-//! Each individual metric can have metadata associated with.
-//! This is a set of static key-value pairs that can be used
-//! to store arbitrary properties of the metric. Empty metadata
-//! can be created by calling [`Metadata::new`](Metadata::new).
-//! Otherwise, `Metadata` is created using the `metadata` macro.
+//! Each individual metric can have metadata associated with. This is a set of
+//! static key-value pairs that can be used to store arbitrary properties of the
+//! metric. Empty metadata can be created by calling
+//! [`Metadata::new`](Metadata::new). Otherwise, `Metadata` is created using the
+//! `metadata` macro.
 //!
 //! # Introspection
-//! To examine and query metrics, use the
-//! [`for_each_metric`][for_each_metric] function.
+//! To examine and query metrics, use the [`for_each_metric`][for_each_metric]
+//! function.
 //!
 //! # Error Handling
 //! This library has a somewhat idiosyncratic approach to error handling.
@@ -28,7 +26,7 @@
 //! is a global error handling function (set by [`set_error_fn`](set_error_fn))
 //! which is called with the error whenever an invalid action is performed.
 //!
-//! **Important Note:** attempting to record values to a non-existant metric
+//! **Important Note:** attempting to record values to a non-existent metric
 //! is not considered an error for performance reasons.
 //!
 //! # Example
@@ -126,8 +124,8 @@ use crate::state::State;
 
 /// Register a new counter.
 ///
-/// If a metric has already been registered under the
-/// same name, then it will return an error.
+/// If a metric has already been registered under the same name, then it will
+/// return an error.
 pub fn register_counter(
     name: impl Into<Cow<'static, str>>,
     counter: impl Into<DynCow<'static, dyn Counter>>,
@@ -138,8 +136,8 @@ pub fn register_counter(
 
 /// Register a new gauge.
 ///
-/// If a metric has already been registered under the
-/// same name, then it will return an error.
+/// If a metric has already been registered under the same name, then it will
+/// return an error.
 pub fn register_gauge(
     name: impl Into<Cow<'static, str>>,
     gauge: impl Into<DynCow<'static, dyn Gauge>>,
@@ -150,8 +148,8 @@ pub fn register_gauge(
 
 /// Register a new summary.
 ///
-/// If a metric has already been registered under the
-/// same name, then it will return an error.
+/// If a metric has already been registered under the same name, then it will
+/// return an error.
 pub fn register_summary(
     name: impl Into<Cow<'static, str>>,
     summary: impl Into<DynCow<'static, dyn Summary>>,
@@ -172,24 +170,21 @@ pub fn unregister_metric(name: impl AsRef<str>) -> Result<(), UnregisterError> {
 
 /// Set the error function.
 ///
-/// Due to the impracticality of having every single metric
-/// return a `Result` this library instead opts to have an
-/// internal error function that is called whenever an error
-/// occurs.
+/// Due to the impracticality of having every single metric return a `Result`
+/// this library instead opts to have an internal error function that is called
+/// whenever an error occurs.
 ///
-/// The default error function will log a warning when an
-/// error occurrs.
+/// The default error function will log a warning when an error occurrs.
 pub fn set_error_fn(err_fn: impl Fn(MetricError) + Send + Sync + 'static) {
     use std::sync::Arc;
 
     State::get_force().set_error_fn(Arc::new(err_fn));
 }
 
-/// Run a function over each metric and collect the result
-/// into a container.
+/// Run a function over each metric and collect the result into a container.
 ///
-/// Due to the underlying API limitations of evmap this is
-/// the only way to introspect existing metrics.
+/// Due to the underlying API limitations of evmap this is the only way to
+/// introspect existing metrics.
 pub fn for_each_metric<C, F, R>(func: F) -> C
 where
     C: std::iter::FromIterator<R>,
@@ -226,8 +221,8 @@ pub mod export {
         }
     }
 
-    /// Record an increment to a counter or gauge. This corresponds
-    /// to the `increment!` macro.
+    /// Record an increment to a counter or gauge. This corresponds to the
+    /// `increment!` macro.
     #[inline]
     pub fn record_increment(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
         if let Some(state) = State::get() {
@@ -235,8 +230,8 @@ pub mod export {
         }
     }
 
-    /// Record a decrement to a gauge. This corresponds to the
-    /// `decrement!` macro.
+    /// Record a decrement to a gauge. This corresponds to the `decrement!`
+    /// macro.
     #[inline]
     pub fn record_decrement(name: impl AsRef<str>, amount: impl Into<MetricValue>, time: Instant) {
         if let Some(state) = State::get() {
@@ -244,8 +239,7 @@ pub mod export {
         }
     }
 
-    /// Record a value, calls the error function if the metric is
-    /// not a counter.
+    /// Record a value, calls the error function if the metric is not a counter.
     #[inline]
     pub fn record_counter_value(name: impl AsRef<str>, amount: u64, time: Instant) {
         if let Some(state) = State::get() {
@@ -253,8 +247,7 @@ pub mod export {
         }
     }
 
-    /// Record a value, calls the error function if the metric is
-    /// not a gauge.
+    /// Record a value, calls the error function if the metric is not a gauge.
     #[inline]
     pub fn record_gauge_value(name: impl AsRef<str>, amount: i64, time: Instant) {
         if let Some(state) = State::get() {

@@ -1,3 +1,7 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use std::ops::Sub;
 
 use time;
@@ -5,19 +9,15 @@ use time;
 /// High-resolution timestamp.
 ///
 /// This timestamp behaves in most respects like
-/// [`std::time::Instant`](std::time::Instant).
-/// However, when subtracting two instants `A - B` it
-/// will return a duration of zero when `A` is before
-/// `B`.
+/// [`std::time::Instant`](std::time::Instant). However, when subtracting two
+/// instants `A - B` it will return a duration of zero when `A` is before `B`.
 #[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Instant {
-    // Our representation is the number of nanoseconds
-    // since an unspecified (but consistent within the
-    // process) epoch. For more details see the docs
+    // Our representation is the number of nanoseconds since an unspecified
+    // (but consistent within the process) epoch. For more details see the docs
     // for the time crate.
     //
-    // In practice this is the return value of
-    // `time::precise_time_ns`
+    // In practice this is the return value of `time::precise_time_ns`
     ns_since_epoch: u64,
 }
 
@@ -41,8 +41,8 @@ pub struct Interval {
 impl Interval {
     /// Convert a number of seconds to an interval.
     ///
-    /// Saturates to the maximum value if secs is more
-    /// than `u64::MAX` nanoseconds.
+    /// Saturates to the maximum value if secs is more than `u64::MAX`
+    /// nanoseconds.
     pub fn from_seconds(secs: u64) -> Self {
         Self {
             duration_ns: secs.saturating_mul(1_000_000_000),
@@ -51,8 +51,8 @@ impl Interval {
 
     /// Convert a number of milliseconds to an interval.
     ///
-    /// Saturates to the maximum value if secs is more
-    /// than `u64::MAX` nanoseconds.
+    /// Saturates to the maximum value if secs is more than `u64::MAX`
+    /// nanoseconds.
     pub fn from_millis(millis: u64) -> Self {
         Self {
             duration_ns: millis.saturating_mul(1_000_000),
@@ -61,8 +61,8 @@ impl Interval {
 
     /// Convert a number of microseconds to an interval.
     ///
-    /// Saturates to the maximum value if secs is more
-    /// than `u64::MAX` nanoseconds.
+    /// Saturates to the maximum value if secs is more than `u64::MAX`
+    /// nanoseconds.
     pub fn from_micros(micros: u64) -> Self {
         Self {
             duration_ns: micros.saturating_mul(1_000),

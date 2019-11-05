@@ -1,3 +1,7 @@
+// Copyright 2019 Twitter, Inc.
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use std::error::Error;
 use std::fmt;
 
@@ -9,9 +13,8 @@ pub enum Empty {}
 
 /// Error for when registering a metric fails.
 ///
-/// This enum should not be matched exhaustively.
-/// However, if for testing purposes it is desired
-/// to match exhaustively, that can be done by matching
+/// This enum should not be matched exhaustively. However, if for testing
+/// purposes it is desired to match exhaustively, that can be done by matching
 /// the final variant like this
 /// ```rust
 /// # use metrics_core::*;
@@ -35,9 +38,8 @@ pub enum RegisterError {
 
 /// Error for when unregistering a metric fails.
 ///
-/// This enum should not be matched exhaustively.
-/// However, if for testing purposes it is desired
-/// to match exhaustively, that can be done by matching
+/// This enum should not be matched exhaustively. However, if for testing
+/// purposes it is desired to match exhaustively, that can be done by matching
 /// the final variant like this
 /// ```rust
 /// # use metrics_core::*;
@@ -61,9 +63,8 @@ pub enum UnregisterError {
 
 /// Description of why writing to a metric failed.
 ///
-/// This enum should not be matched exhaustively.
-/// However, if for testing purposes it is desired
-/// to match exhaustively, that can be done by matching
+/// This enum should not be matched exhaustively. However, if for testing
+/// purposes it is desired to match exhaustively, that can be done by matching
 /// the final variant like this
 /// ```rust
 /// # use metrics_core::*;
@@ -76,25 +77,26 @@ pub enum UnregisterError {
 /// ```
 #[derive(Copy, Clone, Debug)]
 pub enum MetricErrorData {
-    /// Tried to pass a signed value that was negative to
-    /// something expecting an unsigned value.
+    /// Tried to pass a signed value that was negative to something expecting an
+    /// unsigned value.
     InvalidUnsignedValue(i64),
     /// Tried to pass an unsigned value that was too large to something
     /// expecting a signed value.
     InvalidSignedValue(u64),
-    /// The metric is not a type of metric that can be incremented (it's a histogram)
+    /// The metric is not a type of metric that can be incremented (it's a
+    /// histogram)
     InvalidIncrement {
         /// The type of metric we attempted to increment.
         ty: MetricType,
     },
-    /// The metric is not a type of metric that can be decremented
-    /// (it's either a histogram or a counter)
+    /// The metric is not a type of metric that can be decremented (it's either
+    /// a histogram or a counter)
     InvalidDecrement {
         /// The type of metric we attempted to decrement
         ty: MetricType,
     },
-    /// Tried to perform an operation that expected one type but
-    /// instead we got another type.
+    /// Tried to perform an operation that expected one type but instead we got
+    /// another type.
     WrongType {
         /// The type of metric that we expected to find.
         expected: MetricType,
