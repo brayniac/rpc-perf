@@ -14,7 +14,7 @@ pub trait MetricCommon: Send + Sync {
     }
 }
 
-// TODO: consider making these generic in terms of primitive type.
+// TODO(bmartin): consider making these generic in terms of primitive type.
 
 /// A counter. Counts things.
 ///
