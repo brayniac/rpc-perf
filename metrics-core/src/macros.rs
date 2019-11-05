@@ -122,10 +122,6 @@ macro_rules! gauge {
     };
 }
 
-// TODO: we may need another macro for recording non time-interval data into
-// summary types. Use case would be for inserting bucketized counts into the
-// metrics library.
-
 /// Record a timing interval.
 ///
 /// This is equivalent to calling `value!` with the interval.
