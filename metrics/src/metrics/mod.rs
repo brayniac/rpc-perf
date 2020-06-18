@@ -5,7 +5,7 @@
 use crate::*;
 use std::collections::HashMap;
 
-use chashmap::CHashMap;
+use dashmap::DashMap;
 use datastructures::*;
 
 use std::collections::HashSet;
@@ -21,7 +21,7 @@ where
     u64: From<<T as AtomicPrimitive>::Primitive>,
 {
     labels: Arc<Mutex<HashSet<String>>>,
-    data: Arc<CHashMap<String, Arc<Channel<T>>>>,
+    data: Arc<DashMap<String, Arc<Channel<T>>>>,
 }
 
 impl<T> Metrics<T>
@@ -33,7 +33,7 @@ where
     pub fn new() -> Self {
         Self {
             labels: Arc::new(Mutex::new(HashSet::new())),
-            data: Arc::new(CHashMap::new()),
+            data: Arc::new(DashMap::new()),
         }
     }
 
