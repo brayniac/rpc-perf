@@ -325,6 +325,7 @@ impl Client {
                         self.send_request(rng, token);
                     } else {
                         self.ready_queue.push_front(token);
+                        break;
                     }
                 } else {
                     self.send_request(rng, token);
