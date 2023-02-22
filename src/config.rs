@@ -67,21 +67,14 @@ impl Keyspace {
         self.cardinality
     }
 
-    // TODO(aetimmes): implement cardinality for Alphanumeric fields
-    pub fn generate_key(&self, rng: &mut SmallRng) -> Vec<u8> {
-        match self.key_type {
-            FieldType::Alphanumeric => rng
-                .sample_iter(&Alphanumeric)
-                .take(self.length())
-                .collect::<Vec<u8>>(),
-            FieldType::U32 => format!(
-                "{:0>len$}",
-                self.key_distribution.sample(rng) as u32,
-                len = self.length()
-            )
-            .as_bytes()
-            .to_vec(),
+    #[allow(clippy::uninit_vec)]
+    pub fn generate_key(&self, rng: &mut SmallRng, mut key: Vec<u8>) -> Vec<u8> {
+        key.reserve(self.length());
+        unsafe { key.set_len(self.length()) };
+        for byte in key.iter_mut().take(self.length()) {
+            *byte = rng.sample(Alphanumeric)
         }
+        key
     }
 
     //#TODO(atimmes): implement cardinality for Alphanumeric fields
@@ -109,26 +102,22 @@ impl Keyspace {
     }
 
     //#TODO(atimmes): implement cardinality for Alphanumeric fields
-    pub fn generate_value(&self, rng: &mut SmallRng) -> Option<Vec<u8>> {
+    pub fn generate_value(&self, rng: &mut SmallRng, mut value: Vec<u8>) -> Vec<u8> {
         if let Some(ref value_dist) = self.value_dist {
             let value_idx = value_dist.sample(rng);
             let value_conf = &self.values[value_idx];
-            let value = match value_conf.field_type() {
-                FieldType::Alphanumeric => rng
-                    .sample_iter(&Alphanumeric)
-                    .take(value_conf.length())
-                    .collect::<Vec<u8>>(),
-                FieldType::U32 => format!(
-                    "{:0>len$}",
-                    &rng.gen_range(0u32..value_conf.cardinality()),
-                    len = value_conf.length()
-                )
-                .as_bytes()
-                .to_vec(),
-            };
-            Some(value)
+
+            let len = value_conf.length();
+            value.reserve(len);
+            unsafe { value.set_len(len) };
+            for byte in value.iter_mut().take(len) {
+                *byte = rng.sample(Alphanumeric)
+            }
+            value
         } else {
-            None
+            value.truncate(0);
+            value
+            // Err(value)
         }
     }
 

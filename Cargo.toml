@@ -32,8 +32,9 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 rand_xoshiro = { version = "0.6.0" }
 rand_distr = "0.4.3"
 ratelimit = "0.5.1"
-ringlog = "0.1.0"
+ringlog = "0.1.1"
 rtrb = "0.2.2"
+seg = { git = "https://github.com/pelikan-io/pelikan" }
 serde = "1.0.144"
 serde_derive = "1.0.144"
 serde_json = "1.0.85"

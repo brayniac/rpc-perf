@@ -9,7 +9,7 @@ extern crate ringlog;
 mod macros;
 
 mod admin;
-mod codec;
+// mod codec;
 mod config;
 mod config_file;
 mod metrics;
@@ -34,7 +34,7 @@ use worker::Worker;
 /// A structure which represents a runtime builder
 pub struct Builder {
     admin: Admin,
-    workers: Vec<Worker>,
+    worker: Worker,
 }
 
 impl Builder {
@@ -143,17 +143,10 @@ impl Builder {
             info!("endpoint: {}", endpoint);
         }
 
-        let mut workers = Vec::new();
-        for _ in 0..threads {
-            let mut worker = Worker::new(config.clone()).unwrap();
-            worker.set_connect_ratelimit(connect_ratelimit.clone());
-            worker.set_reconnect_ratelimit(reconnect_ratelimit.clone());
-            worker.set_request_ratelimit(request_ratelimit.clone());
-            worker.set_connect_heatmap(connect_heatmap.clone());
-            worker.set_request_heatmap(request_heatmap.clone());
-            worker.set_request_waterfall(request_waterfall.clone());
-            workers.push(worker);
-        }
+        let mut worker = Worker::new(config.clone()).unwrap();
+        worker.set_request_ratelimit(request_ratelimit.clone());
+        worker.set_request_heatmap(request_heatmap.clone());
+        worker.set_request_waterfall(request_waterfall.clone());
 
         let mut admin = Admin::new(config, log);
         admin.set_connect_heatmap(connect_heatmap);
@@ -162,22 +155,20 @@ impl Builder {
         admin.set_request_ratelimit(request_ratelimit);
         admin.set_request_waterfall(request_waterfall);
 
-        Self { admin, workers }
+        Self { admin, worker }
     }
 
     /// Launch the runtime
-    pub fn spawn(mut self) -> Runtime {
+    pub fn spawn(self) -> Runtime {
         let admin = self.admin;
         let admin_thread = std::thread::spawn(move || admin.run());
 
-        let mut worker_threads = Vec::new();
-        for mut worker in self.workers.drain(..) {
-            worker_threads.push(std::thread::spawn(move || worker.run()));
-        }
+        let mut worker = self.worker;
+        let worker_thread = std::thread::spawn(move || worker.run());
 
         Runtime {
             admin_thread,
-            worker_threads,
+            worker_thread,
         }
     }
 }
@@ -186,7 +177,7 @@ impl Builder {
 /// Holds the runtime threads
 pub struct Runtime {
     admin_thread: JoinHandle<()>,
-    worker_threads: Vec<JoinHandle<()>>,
+    worker_thread: JoinHandle<()>,
 }
 
 impl Runtime {
