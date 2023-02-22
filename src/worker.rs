@@ -100,8 +100,7 @@ impl Worker {
 
             if let Some(ref heatmap) = self.request_heatmap {
                 let elapsed = (stop - start).as_nanos();
-                let us = elapsed / 1_000;
-                heatmap.increment(stop, us, 1);
+                heatmap.increment(stop, elapsed, 1);
 
                 if let Some(ref waterfall) = self.request_waterfall {
                     waterfall.increment(stop, elapsed, 1);

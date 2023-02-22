@@ -225,19 +225,6 @@ impl Admin {
 
             info!("Hit-rate: {:.2} %", hit_rate);
 
-            if let Some(ref heatmap) = self.connect_heatmap {
-                let p25 = heatmap.percentile(25.0).map(|b| b.high()).unwrap_or(0);
-                let p50 = heatmap.percentile(50.0).map(|b| b.high()).unwrap_or(0);
-                let p75 = heatmap.percentile(75.0).map(|b| b.high()).unwrap_or(0);
-                let p90 = heatmap.percentile(90.0).map(|b| b.high()).unwrap_or(0);
-                let p99 = heatmap.percentile(99.0).map(|b| b.high()).unwrap_or(0);
-                let p999 = heatmap.percentile(99.9).map(|b| b.high()).unwrap_or(0);
-                let p9999 = heatmap.percentile(99.99).map(|b| b.high()).unwrap_or(0);
-                info!("Connect Latency (us): p25: {} p50: {} p75: {} p90: {} p99: {} p999: {} p9999: {}",
-                    p25, p50, p75, p90, p99, p999, p9999
-                );
-            }
-
             if let Some(ref heatmap) = self.request_heatmap {
                 let p25 = heatmap.percentile(25.0).map(|b| b.high()).unwrap_or(0);
                 let p50 = heatmap.percentile(50.0).map(|b| b.high()).unwrap_or(0);
@@ -246,7 +233,7 @@ impl Admin {
                 let p99 = heatmap.percentile(99.0).map(|b| b.high()).unwrap_or(0);
                 let p999 = heatmap.percentile(99.9).map(|b| b.high()).unwrap_or(0);
                 let p9999 = heatmap.percentile(99.99).map(|b| b.high()).unwrap_or(0);
-                info!("Response Latency (us): p25: {} p50: {} p75: {} p90: {} p99: {} p999: {} p9999: {}",
+                info!("Response Latency (ns): p25: {} p50: {} p75: {} p90: {} p99: {} p999: {} p9999: {}",
                     p25, p50, p75, p90, p99, p999, p9999
                 );
             }
