@@ -53,7 +53,7 @@ reconnect = 5
 
 [request]
 # set a global ratelimit for requests
-ratelimit = 50000
+#ratelimit = 50000
 
 [[keyspace]]
 # controls what commands will be used in this keyspace
