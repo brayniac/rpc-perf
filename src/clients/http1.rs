@@ -148,7 +148,7 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
             Ok(Ok(response)) => {
                 // validate response
                 match &work_item {
-                    WorkItem::Request { request, sequence } => match request {
+                    WorkItem::Request { request, .. } => match request {
                         ClientRequest::Get { .. } => {
                             GET_OK.increment();
                         }
@@ -180,6 +180,8 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
                 }
             }
             Ok(Err(_e)) => {
+                RESPONSE_EX.increment();
+
                 // record execption
                 match work_item {
                     WorkItem::Request { request, .. } => match request {
