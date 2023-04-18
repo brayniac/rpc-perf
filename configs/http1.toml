@@ -70,4 +70,10 @@ commands = [
 ]
 
 [tls]
+# set a path to a root CA PEM, useful if running your own CA
+#ca_file = "path/to/root_ca.pem"
+# require that the server certifcate and hostname match
+#verify_hostname = "true"
+# enable TLS Server Name Identification
+#use_sni = "true"
 
