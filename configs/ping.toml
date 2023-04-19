@@ -56,7 +56,9 @@ commands = [
 	{ verb = "ping", weight = 100 },
 ]
 
-[tls]
+# To enable mTLS, uncomment the `[tls]` section below.
+
+#[tls]
 # set the client's TLS private key for mTLS authentication
 #private_key = "path/to/client_key.pem"
 # set the client's TLS certificate for mTLS authentication
