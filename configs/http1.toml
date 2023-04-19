@@ -18,7 +18,7 @@ admin = "127.0.0.1:9090"
 # choose from: error, warn, info, debug, trace
 log_level = "info"
 # optionally, log to the file below instead of standard out
-# log_file = "rpc-perf.log"
+#log_file = "rpc-perf.log"
 # backup file name for use with log rotation
 log_backup = "rpc-perf.log.old"
 # trigger log rotation when the file grows beyond this size (in bytes). Set this
@@ -70,10 +70,10 @@ commands = [
 ]
 
 [tls]
-# set a path to a root CA PEM, useful if running your own CA
-#ca_file = "path/to/root_ca.pem"
-# require that the server certifcate and hostname match
-#verify_hostname = "true"
+# set a path to a Root CA PEM. If the CA for the server certificate is not in
+#   the system store, you will need to provide the path here.
+#ca_file = "path/to/ca.crt"
+# require that the server certificate and hostname match
+#verify_hostname = true
 # enable TLS Server Name Identification
-#use_sni = "true"
-
+#use_sni = true
