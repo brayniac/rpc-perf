@@ -14,6 +14,7 @@ mod memcache;
 mod momento;
 mod ping;
 mod redis;
+mod redis2;
 
 pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>) -> Option<Runtime> {
     debug!("Launching clients...");
@@ -44,7 +45,7 @@ pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>) -> Opt
             clients::ping::launch_tasks(&mut client_rt, config.clone(), work_receiver)
         }
         Protocol::Resp => {
-            clients::redis::launch_tasks(&mut client_rt, config.clone(), work_receiver)
+            clients::redis2::launch_tasks(&mut client_rt, config.clone(), work_receiver)
         }
     }
 
