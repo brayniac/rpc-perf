@@ -25,7 +25,6 @@ pub fn validate_response(response: Response) -> std::result::Result<(), ()> {
             Ok(())
         }
         _ => {
-            println!("get ex");
             GET_EX.increment();
             Err(())
         }

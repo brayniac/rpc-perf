@@ -28,7 +28,6 @@ pub fn validate_response(response: Response) -> std::result::Result<(), ()> {
             Ok(())
         }
         _ => {
-            println!("set ex");
             SET_EX.increment();
             Err(())
         }
