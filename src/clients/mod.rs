@@ -25,6 +25,8 @@ pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>) -> Opt
     let mut client_rt = Builder::new_multi_thread()
         .enable_all()
         .worker_threads(config.client().unwrap().threads())
+        .global_queue_interval(113)
+        .event_interval(113)
         .build()
         .expect("failed to initialize tokio runtime");
 
