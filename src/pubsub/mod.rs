@@ -2,7 +2,7 @@ use crate::clients::*;
 use crate::workload::Component;
 use crate::workload::PublisherWorkItem as WorkItem;
 use crate::*;
-use async_channel::Receiver;
+use flume::Receiver;
 use std::io::{Error, ErrorKind, Result};
 use tokio::runtime::Runtime;
 

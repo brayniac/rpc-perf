@@ -157,7 +157,7 @@ async fn task(
         let mut s = sender.take().unwrap();
 
         let work_item = work_receiver
-            .recv()
+            .recv_async()
             .await
             .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
 

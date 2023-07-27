@@ -1,3 +1,4 @@
+use flume::Sender;
 use super::*;
 use config::{Command, ValueKind, Verb};
 use rand::distributions::{Alphanumeric, Uniform};
@@ -141,10 +142,10 @@ impl Generator {
 
         match &self.components[self.component_dist.sample(rng)] {
             Component::Keyspace(keyspace) => {
-                let _ = client_sender.send_blocking(self.generate_request(keyspace, rng));
+                let _ = client_sender.send(self.generate_request(keyspace, rng));
             }
             Component::Topics(topics) => {
-                let _ = pubsub_sender.send_blocking(self.generate_pubsub(topics, rng));
+                let _ = pubsub_sender.send(self.generate_pubsub(topics, rng));
             }
         }
     }
@@ -666,7 +667,7 @@ pub async fn reconnect(work_sender: Sender<ClientWorkItem>, config: Config) -> R
     while RUNNING.load(Ordering::Relaxed) {
         match ratelimiter.try_wait() {
             Ok(_) => {
-                let _ = work_sender.send(ClientWorkItem::Reconnect).await;
+                let _ = work_sender.send_async(ClientWorkItem::Reconnect).await;
             }
             Err(d) => {
                 std::thread::sleep(d);

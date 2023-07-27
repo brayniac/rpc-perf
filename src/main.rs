@@ -1,7 +1,8 @@
+use flume::bounded;
 use crate::clients::launch_clients;
 use crate::pubsub::launch_pubsub;
 use crate::workload::{launch_workload, Generator};
-use async_channel::{bounded, Sender};
+// use async_channel::{bounded, Sender};
 use backtrace::Backtrace;
 use clap::{Arg, Command};
 use core::sync::atomic::{AtomicBool, Ordering};

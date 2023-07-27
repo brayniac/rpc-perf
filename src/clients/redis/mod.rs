@@ -77,7 +77,7 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
 
         let mut con = connection.take().unwrap();
         let work_item = work_receiver
-            .recv()
+            .recv_async()
             .await
             .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
 
