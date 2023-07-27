@@ -76,13 +76,13 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
         }
 
         let mut con = connection.take().unwrap();
-        let work_item = match work_receiver.try_recv() {
+        let work_item = match work_receiver.recv_timeout(Duration::from_micros(10)) {
             Ok(item) => item,
-            Err(TryRecvError::Empty) => {
+            Err(RecvTimeoutError::Timeout) => {
                 tokio::task::block_in_place(|| work_receiver.recv())
                     .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?
             }
-            Err(_) => {
+            Err(RecvTimeoutError::Disconnected) => {
                 return Err(Error::new(ErrorKind::Other, "channel closed"));
             }
         };
