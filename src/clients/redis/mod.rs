@@ -76,8 +76,16 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
         }
 
         let mut con = connection.take().unwrap();
-        let work_item = tokio::task::block_in_place(|| work_receiver.recv())
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        let work_item = match work_receiver.try_recv() {
+            Ok(item) => item,
+            Err(TryRecvError::Empty) => {
+                tokio::task::block_in_place(|| work_receiver.recv())
+                    .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?
+            }
+            Err(_) => {
+                return Err(Error::new(ErrorKind::Other, "channel closed"));
+            }
+        };
 
         REQUEST.increment();
         let start = Instant::now();

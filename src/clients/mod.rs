@@ -2,7 +2,7 @@ use crate::workload::ClientRequest;
 use crate::workload::ClientWorkItem as WorkItem;
 use crate::*;
 use ::momento::MomentoError;
-use crossbeam::channel::Receiver;
+use crossbeam::channel::{Receiver, TryRecvError};
 use std::io::{Error, ErrorKind, Result};
 use tokio::io::*;
 use tokio::runtime::Runtime;
