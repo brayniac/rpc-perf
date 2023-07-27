@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use tokio::sync::Notify;
 use crate::clients::launch_clients;
 use crate::pubsub::launch_pubsub;
 use crate::workload::{launch_workload, Generator};
@@ -116,8 +118,10 @@ fn main() {
     });
 
     // TODO: figure out what a reasonable size is here
-    let (client_sender, client_receiver) = bounded(128);
-    let (pubsub_sender, pubsub_receiver) = bounded(128);
+    let (client_work_sender, client_work_receiver) = bounded(128);
+    let (client_notify_sender, client_notify_receiver) = bounded(65536);
+    let (pubsub_work_sender, pubsub_work_receiver) = bounded(128);
+    let (pubsub_notify_sender, pubsub_notify_receiver) = bounded(65536);
 
     output!("Protocol: {:?}", config.general().protocol());
 
@@ -132,11 +136,11 @@ fn main() {
     control_runtime.spawn(admin::http(config.clone(), workload_ratelimit.clone()));
 
     let workload_runtime =
-        launch_workload(workload_generator, &config, client_sender, pubsub_sender);
+        launch_workload(workload_generator, &config, client_work_sender, client_notify_receiver, pubsub_work_sender, pubsub_notify_receiver);
 
-    let client_runtime = launch_clients(&config, client_receiver);
+    let client_runtime = launch_clients(&config, client_work_receiver, client_notify_sender);
 
-    let mut pubsub_runtimes = launch_pubsub(&config, pubsub_receiver, workload_components);
+    let mut pubsub_runtimes = launch_pubsub(&config, pubsub_work_receiver, workload_components);
 
     // launch json log output
     {

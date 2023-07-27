@@ -1,3 +1,5 @@
+use tokio::sync::Notify;
+use std::sync::Arc;
 use super::*;
 use crate::net::Connector;
 use protocol_memcache::{Compose, Parse, Request, Response, Ttl};
@@ -12,7 +14,7 @@ struct RequestWithValidator {
 }
 
 /// Launch tasks with one conncetion per task as memcache protocol is not mux-enabled.
-pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiver<WorkItem>) {
+pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiver<WorkItem>, notify_sender: Sender<Arc<Notify>>) {
     debug!("launching memcache protocol tasks");
 
     // create one task per connection
@@ -20,6 +22,7 @@ pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiv
         for endpoint in config.target().endpoints() {
             runtime.spawn(task(
                 work_receiver.clone(),
+                notify_sender.clone(),
                 endpoint.clone(),
                 config.clone(),
             ));
@@ -28,7 +31,7 @@ pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiv
 }
 
 #[allow(clippy::slow_vector_initialization)]
-async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Config) -> Result<()> {
+async fn task(work_receiver: Receiver<WorkItem>, notify_sender: Sender<Arc<Notify>>, endpoint: String, config: Config) -> Result<()> {
     let connector = Connector::new(&config)?;
 
     // we would not be creating a memcache client task if we didn't have a
@@ -39,6 +42,8 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
     let parser = protocol_memcache::ResponseParser {};
     let mut read_buffer = Buffer::new(client_config.read_buffer_size());
     let mut write_buffer = Buffer::new(client_config.write_buffer_size());
+
+    let notify = Arc::new(Notify::new());
 
     while RUNNING.load(Ordering::Relaxed) {
         if stream.is_none() {
@@ -69,8 +74,20 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
 
         let mut s = stream.take().unwrap();
 
-        let work_item = tokio::task::block_in_place(|| work_receiver.recv())
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        let work_item = loop {
+            match work_receiver.try_recv() {
+                Ok(item) => {
+                    break item;
+                }
+                Err(TryRecvError::Empty) => {
+                    let _ = notify_sender.send(notify.clone());
+                    notify.notified().await;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    return Err(Error::new(ErrorKind::Other, "channel closed"));
+                }
+            }
+        };
 
         REQUEST.increment();
 

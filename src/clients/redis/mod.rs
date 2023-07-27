@@ -10,7 +10,7 @@ mod commands;
 use commands::*;
 
 /// Launch tasks with one conncetion per task as RESP protocol is not mux-enabled.
-pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiver<WorkItem>) {
+pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiver<WorkItem>, notify_sender: Sender<Arc<Notify>>) {
     debug!("launching resp protocol tasks");
 
     // create one task per "connection"
@@ -19,6 +19,7 @@ pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiv
         for endpoint in config.target().endpoints() {
             runtime.spawn(task(
                 work_receiver.clone(),
+                notify_sender.clone(),
                 endpoint.clone(),
                 config.clone(),
             ));
@@ -28,7 +29,7 @@ pub fn launch_tasks(runtime: &mut Runtime, config: Config, work_receiver: Receiv
 
 #[allow(dead_code)]
 #[allow(clippy::slow_vector_initialization)]
-async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Config) -> Result<()> {
+async fn task(work_receiver: Receiver<WorkItem>, notify_sender: Sender<Arc<Notify>>, endpoint: String, config: Config) -> Result<()> {
     trace!("launching resp task for endpoint: {endpoint}");
     let connector = Connector::new(&config)?;
 
@@ -39,6 +40,8 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
     };
 
     let mut connection = None;
+
+    let notify = Arc::new(Notify::new());
 
     while RUNNING.load(Ordering::Relaxed) {
         if connection.is_none() {
@@ -76,14 +79,19 @@ async fn task(work_receiver: Receiver<WorkItem>, endpoint: String, config: Confi
         }
 
         let mut con = connection.take().unwrap();
-        let work_item = match work_receiver.recv_timeout(Duration::from_micros(10)) {
-            Ok(item) => item,
-            Err(RecvTimeoutError::Timeout) => {
-                tokio::task::block_in_place(|| work_receiver.recv())
-                    .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?
-            }
-            Err(RecvTimeoutError::Disconnected) => {
-                return Err(Error::new(ErrorKind::Other, "channel closed"));
+        
+        let work_item = loop {
+            match work_receiver.try_recv() {
+                Ok(item) => {
+                    break item;
+                }
+                Err(TryRecvError::Empty) => {
+                    let _ = notify_sender.send(notify.clone());
+                    notify.notified().await;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    return Err(Error::new(ErrorKind::Other, "channel closed"));
+                }
             }
         };
 

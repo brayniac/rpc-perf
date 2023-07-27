@@ -2,7 +2,7 @@ use crate::workload::ClientRequest;
 use crate::workload::ClientWorkItem as WorkItem;
 use crate::*;
 use ::momento::MomentoError;
-use crossbeam::channel::{Receiver, RecvTimeoutError};
+use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use std::io::{Error, ErrorKind, Result};
 use tokio::io::*;
 use tokio::runtime::Runtime;
@@ -15,7 +15,9 @@ mod momento;
 mod ping;
 mod redis;
 
-pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>) -> Option<Runtime> {
+
+
+pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>, notify_sender: Sender<Arc<Notify>>) -> Option<Runtime> {
     debug!("Launching clients...");
 
     config.client()?;
@@ -35,7 +37,7 @@ pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>) -> Opt
             clients::http2::launch_tasks(&mut client_rt, config.clone(), work_receiver)
         }
         Protocol::Memcache => {
-            clients::memcache::launch_tasks(&mut client_rt, config.clone(), work_receiver)
+            clients::memcache::launch_tasks(&mut client_rt, config.clone(), work_receiver, notify_sender)
         }
         Protocol::Momento => {
             clients::momento::launch_tasks(&mut client_rt, config.clone(), work_receiver)
@@ -44,7 +46,7 @@ pub fn launch_clients(config: &Config, work_receiver: Receiver<WorkItem>) -> Opt
             clients::ping::launch_tasks(&mut client_rt, config.clone(), work_receiver)
         }
         Protocol::Resp => {
-            clients::redis::launch_tasks(&mut client_rt, config.clone(), work_receiver)
+            clients::redis::launch_tasks(&mut client_rt, config.clone(), work_receiver, notify_sender)
         }
     }
 

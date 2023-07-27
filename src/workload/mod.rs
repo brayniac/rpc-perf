@@ -1,6 +1,6 @@
 use super::*;
 use config::{Command, ValueKind, Verb};
-use crossbeam::channel::Sender;
+use crossbeam::channel::{Receiver, Sender};
 use rand::distributions::{Alphanumeric, Uniform};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_distr::Distribution as RandomDistribution;
@@ -25,8 +25,10 @@ static SEQUENCE_NUMBER: AtomicU64 = AtomicU64::new(0);
 pub fn launch_workload(
     generator: Generator,
     config: &Config,
-    client_sender: Sender<ClientWorkItem>,
-    pubsub_sender: Sender<PublisherWorkItem>,
+    client_work: Sender<ClientWorkItem>,
+    client_notify: Receiver<Arc<Notify>>,
+    pubsub_work: Sender<PublisherWorkItem>,
+    pubsub_notify: Receiver<Arc<Notify>>,
 ) -> Runtime {
     debug!("Launching workload...");
 
@@ -43,8 +45,10 @@ pub fn launch_workload(
 
     // spawn the request generators on a blocking threads
     for _ in 0..config.workload().threads() {
-        let client_sender = client_sender.clone();
-        let pubsub_sender = pubsub_sender.clone();
+        let client_work = client_work.clone();
+        let client_notify = client_notify.clone();
+        let pubsub_work = pubsub_work.clone();
+        let pubsub_notify = pubsub_notify.clone();
         let generator = generator.clone();
 
         // generate the seed for this workload thread
@@ -57,13 +61,13 @@ pub fn launch_workload(
             let mut rng = Xoshiro512PlusPlus::from_seed(Seed512(seed));
 
             while RUNNING.load(Ordering::Relaxed) {
-                generator.generate(&client_sender, &pubsub_sender, &mut rng);
+                generator.generate(&client_work, &client_notify, &pubsub_work, &pubsub_notify, &mut rng);
             }
         });
     }
 
     let c = config.clone();
-    workload_rt.spawn_blocking(move || reconnect(client_sender, c));
+    workload_rt.spawn_blocking(move || reconnect(client_work, client_notify, c));
 
     workload_rt
 }
@@ -126,8 +130,10 @@ impl Generator {
 
     pub fn generate(
         &self,
-        client_sender: &Sender<ClientWorkItem>,
-        pubsub_sender: &Sender<PublisherWorkItem>,
+        client_work: &Sender<ClientWorkItem>,
+        client_notify: &Receiver<Arc<Notify>>,
+        pubsub_work: &Sender<PublisherWorkItem>,
+        pubsub_notify: &Receiver<Arc<Notify>>,
         rng: &mut dyn RngCore,
     ) {
         if let Some(ref ratelimiter) = self.ratelimiter {
@@ -142,10 +148,16 @@ impl Generator {
 
         match &self.components[self.component_dist.sample(rng)] {
             Component::Keyspace(keyspace) => {
-                let _ = client_sender.send(self.generate_request(keyspace, rng));
+                let _ = client_work.send(self.generate_request(keyspace, rng));
+                if let Ok(notify) = client_notify.recv() {
+                    notify.notify_one();
+                }
             }
             Component::Topics(topics) => {
-                let _ = pubsub_sender.send(self.generate_pubsub(topics, rng));
+                let _ = pubsub_work.send(self.generate_pubsub(topics, rng));
+                if let Ok(notify) = pubsub_notify.recv() {
+                    notify.notify_one();
+                }
             }
         }
     }
@@ -635,7 +647,7 @@ impl Keyspace {
     }
 }
 
-pub async fn reconnect(work_sender: Sender<ClientWorkItem>, config: Config) -> Result<()> {
+pub async fn reconnect(client_work: Sender<ClientWorkItem>, client_notify: Receiver<Arc<Notify>>, config: Config) -> Result<()> {
     if config.client().is_none() {
         return Ok(());
     }
@@ -667,7 +679,10 @@ pub async fn reconnect(work_sender: Sender<ClientWorkItem>, config: Config) -> R
     while RUNNING.load(Ordering::Relaxed) {
         match ratelimiter.try_wait() {
             Ok(_) => {
-                let _ = tokio::task::block_in_place(|| work_sender.send(ClientWorkItem::Reconnect));
+                let _ = client_work.send(ClientWorkItem::Reconnect);
+                if let Ok(notify) = client_notify.recv() {
+                    notify.notify_one();
+                }
             }
             Err(d) => {
                 std::thread::sleep(d);
