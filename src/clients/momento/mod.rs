@@ -63,9 +63,7 @@ async fn task(
     });
 
     while RUNNING.load(Ordering::Relaxed) {
-        let work_item = work_receiver
-            .recv_async()
-            .await
+        let work_item = tokio::task::block_in_place(|| work_receiver.recv())
             .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
 
         REQUEST.increment();

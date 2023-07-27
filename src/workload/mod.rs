@@ -1,6 +1,6 @@
-use flume::Sender;
 use super::*;
 use config::{Command, ValueKind, Verb};
+use crossbeam::channel::Sender;
 use rand::distributions::{Alphanumeric, Uniform};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_distr::Distribution as RandomDistribution;
@@ -667,7 +667,7 @@ pub async fn reconnect(work_sender: Sender<ClientWorkItem>, config: Config) -> R
     while RUNNING.load(Ordering::Relaxed) {
         match ratelimiter.try_wait() {
             Ok(_) => {
-                let _ = work_sender.send_async(ClientWorkItem::Reconnect).await;
+                let _ = tokio::task::block_in_place(|| work_sender.send(ClientWorkItem::Reconnect));
             }
             Err(d) => {
                 std::thread::sleep(d);

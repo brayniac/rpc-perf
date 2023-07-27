@@ -1,7 +1,7 @@
-use flume::bounded;
 use crate::clients::launch_clients;
 use crate::pubsub::launch_pubsub;
 use crate::workload::{launch_workload, Generator};
+use crossbeam::channel::bounded;
 // use async_channel::{bounded, Sender};
 use backtrace::Backtrace;
 use clap::{Arg, Command};
