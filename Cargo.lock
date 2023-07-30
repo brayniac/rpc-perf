@@ -1776,13 +1776,13 @@ dependencies = [
 
 [[package]]
 name = "ratelimit"
-version = "0.7.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ab80ec32e625af41cd6ffc39fe4dd943e6f71b437d2e29df65ad2426d1268ef"
+checksum = "4e9c124ab68f28501873b8c5ecfa0de688e37cbe4f1b5440ed1971135e7c84e8"
 dependencies = [
  "clocksource",
- "parking_lot",
- "thiserror",
+ "rand",
+ "rand_distr",
 ]
 
 [[package]]
