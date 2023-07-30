@@ -135,7 +135,7 @@ impl Generator {
                     break;
                 }
 
-                std::thread::sleep(std::time::Duration::from_micros(100));
+                // std::thread::sleep(std::time::Duration::from_micros(100));
             }
         }
 
@@ -676,8 +676,8 @@ pub async fn reconnect(work_sender: Sender<ClientWorkItem>, config: Config) -> R
             Ok(_) => {
                 let _ = work_sender.send(ClientWorkItem::Reconnect).await;
             }
-            Err(d) => {
-                std::thread::sleep(d);
+            Err(_d) => {
+                // std::thread::sleep(d);
             }
         }
     }
