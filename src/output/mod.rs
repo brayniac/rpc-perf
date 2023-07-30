@@ -416,7 +416,7 @@ pub fn json(config: Config, ratelimit: Option<&Ratelimiter>) {
             let json = JsonSnapshot {
                 window: window_id,
                 elapsed,
-                target_qps: ratelimit.as_ref().map(|ratelimit| ratelimit.rate()),
+                target_qps: ratelimit.as_ref().map(|ratelimit| ratelimit.rate() as _),
                 client: Client {
                     connections,
                     requests,
