@@ -398,13 +398,13 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "boring",
  "clocksource",
  "macros",
- "metriken 0.1.4",
- "net",
+ "metriken 0.2.1",
+ "net 0.3.1 (git+https://github.com/brayniac/pelikan?branch=metriken)",
  "ringlog 0.1.1",
  "serde",
 ]
@@ -421,7 +421,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "common",
  "log",
@@ -1117,7 +1117,7 @@ dependencies = [
 [[package]]
 name = "logger"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "common",
  "config",
@@ -1136,7 +1136,7 @@ dependencies = [
 [[package]]
 name = "macros"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1349,6 +1349,19 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "try-lock",
+]
+
+[[package]]
+name = "net"
+version = "0.3.1"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
+dependencies = [
+ "boring",
+ "boring-sys",
+ "foreign-types-shared",
+ "libc",
+ "metriken 0.2.1",
+ "mio 0.8.6",
 ]
 
 [[package]]
@@ -1682,7 +1695,7 @@ dependencies = [
 [[package]]
 name = "protocol-common"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "bytes 1.4.0",
  "common",
@@ -1694,11 +1707,11 @@ dependencies = [
 [[package]]
 name = "protocol-memcache"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "common",
  "logger",
- "metriken 0.1.4",
+ "metriken 0.2.1",
  "nom",
  "protocol-common",
 ]
@@ -1706,12 +1719,12 @@ dependencies = [
 [[package]]
 name = "protocol-ping"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "common",
  "config",
  "logger",
- "metriken 0.1.4",
+ "metriken 0.2.1",
  "protocol-common",
  "storage-types",
 ]
@@ -1899,7 +1912,7 @@ dependencies = [
  "metriken 0.2.1",
  "mio 0.8.6",
  "momento",
- "net",
+ "net 0.3.1 (git+https://github.com/pelikan-io/pelikan)",
  "paste",
  "protocol-memcache",
  "protocol-ping",
@@ -2101,13 +2114,13 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 dependencies = [
  "bytes 1.4.0",
  "common",
  "log",
- "metriken 0.1.4",
- "net",
+ "metriken 0.2.1",
+ "net 0.3.1 (git+https://github.com/brayniac/pelikan?branch=metriken)",
  "protocol-common",
 ]
 
@@ -2212,7 +2225,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "storage-types"
 version = "0.3.1"
-source = "git+https://github.com/pelikan-io/pelikan#bb18e0c51712779721fc1d1b1a48b6d26ab02aed"
+source = "git+https://github.com/brayniac/pelikan?branch=metriken#de38e75c034f115a48a57bc3a2caf0d492ae118f"
 
 [[package]]
 name = "strsim"
