@@ -25,7 +25,7 @@ humantime = "2.1.0"
 momento = "0.31.0"
 metriken = "0.2.1"
 mio = "0.8.5"
-net = { git = "https://github.com/pelikan-io/pelikan" }
+net = { git = "https://github.com/brayniac/pelikan", branch = "metriken" }
 paste = "1.0.12"
 protocol-memcache = { git = "https://github.com/brayniac/pelikan", branch = "metriken" }
 protocol-ping = { git = "https://github.com/brayniac/pelikan", branch = "metriken" }
