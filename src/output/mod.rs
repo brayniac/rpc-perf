@@ -5,17 +5,17 @@ use ahash::{HashMap, HashMapExt};
 use ratelimit::Ratelimiter;
 use std::io::{BufWriter, Write};
 
-use histogram::CompactHistogram;
+use histogram::compact::Histogram as CompactHistogram;
 
 #[macro_export]
 macro_rules! output {
     () => {
-        let now = clocksource::DateTime::now();
-        println!("{}", now.to_rfc3339_opts(clocksource::SecondsFormat::Millis, false));
+        let now = clocksource::datetime::DateTime::from(UnixInstant::now());
+        println!("{}", now);
     };
     ($($arg:tt)*) => {{
-        let now = clocksource::DateTime::now();
-        println!("{} {}", now.to_rfc3339_opts(clocksource::SecondsFormat::Millis, false), format_args!($($arg)*));
+        let now = clocksource::datetime::DateTime::from(UnixInstant::now());
+        println!("{} {}", now, format_args!($($arg)*));
     }};
 }
 
@@ -134,7 +134,7 @@ fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
     let mut latencies = "Client Response Latency (us):".to_owned();
     for (label, percentile) in PERCENTILES {
         let value = match RESPONSE_LATENCY.percentile(*percentile) {
-            Some(Ok(b)) => format!("{}", b.high() / 1000),
+            Some(Ok(b)) => format!("{}", b.upper() / 1000),
             _ => "ERR".to_string(),
         };
         latencies.push_str(&format!(" {label}: {value}"))
@@ -198,7 +198,7 @@ fn pubsub_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
     let mut latencies = "Pubsub Publish Latency (us):".to_owned();
     for (label, percentile) in PERCENTILES {
         let value = match RESPONSE_LATENCY.percentile(*percentile) {
-            Some(Ok(b)) => format!("{}", b.high() / 1000),
+            Some(Ok(b)) => format!("{}", b.upper() / 1000),
             _ => "ERR".to_string(),
         };
         latencies.push_str(&format!(" {label}: {value}"))
@@ -209,7 +209,7 @@ fn pubsub_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
     let mut latencies = "Pubsub End-to-End Latency (us):".to_owned();
     for (label, percentile) in PERCENTILES {
         let value = match RESPONSE_LATENCY.percentile(*percentile) {
-            Some(Ok(b)) => format!("{}", b.high() / 1000),
+            Some(Ok(b)) => format!("{}", b.upper() / 1000),
             _ => "ERR".to_string(),
         };
         latencies.push_str(&format!(" {label}: {value}"))
@@ -221,17 +221,10 @@ fn pubsub_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
 }
 
 // gets the non-zero buckets for the most recent window in the heatmap
-fn heatmap_to_buckets(heatmap: &Heatmap) -> CompactHistogram {
-    // XXX: The heatmap corrects for wraparound and fixes indices once
-    // the heatmap is full so this returns the histogram for the last
-    // completed epoch, assuming a heatmap with a total of 60 valid
-    // histograms. However, this only kicks in after the entire histogram
-    // has been populated, so for the first minute, no histograms
-    // are returned (the histogram at offset 59 is still invalid).
-    if let Some(Some(histogram)) = heatmap.iter().map(|mut i| i.nth(59)) {
-        CompactHistogram::from(histogram)
+fn heatmap_to_buckets(heatmap: &Histogram) -> CompactHistogram {
+    if let Some(Ok(histogram)) = heatmap.distribution_last(Duration::from_secs(1)) {
+        CompactHistogram::from(&histogram)
     } else {
-        trace!("no histogram");
         CompactHistogram::default()
     }
 }

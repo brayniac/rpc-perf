@@ -8,5 +8,5 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-histogram = { workspace = true }
+histogram = { workspace = true, features = ["serde"] }
 serde = { workspace = true }

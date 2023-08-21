@@ -134,12 +134,12 @@ impl<'a> TryFrom<&'a metriken::MetricEntry> for Metric<'a> {
                 metric.description(),
                 gauge.value(),
             ))
-        } else if let Some(heatmap) = any.downcast_ref::<Heatmap>() {
+        } else if let Some(heatmap) = any.downcast_ref::<Histogram>() {
             let percentiles = PERCENTILES
                 .iter()
                 .map(|(label, percentile)| {
                     let value = match heatmap.percentile(*percentile) {
-                        Some(Ok(bucket)) => Some(bucket.high()),
+                        Some(Ok(bucket)) => Some(bucket.upper()),
                         _ => None,
                     };
                     (*label, *percentile, value)

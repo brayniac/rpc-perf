@@ -6,7 +6,7 @@ use backtrace::Backtrace;
 use clap::{Arg, Command};
 use core::sync::atomic::{AtomicBool, Ordering};
 use core::time::Duration;
-use metriken::{Counter, Gauge, Heatmap};
+use metriken::{Counter, Gauge, Histogram};
 use ringlog::*;
 use std::collections::HashMap;
 use tokio::runtime::Builder;
@@ -25,8 +25,8 @@ mod workload;
 use config::*;
 use metrics::*;
 
-type Instant = clocksource::Instant<clocksource::Nanoseconds<u64>>;
-type UnixInstant = clocksource::UnixInstant<clocksource::Nanoseconds<u64>>;
+type Instant = clocksource::precise::Instant;
+type UnixInstant = clocksource::precise::UnixInstant;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
@@ -107,7 +107,7 @@ fn main() {
     // spawn logging thread
     control_runtime.spawn(async move {
         while RUNNING.load(Ordering::Relaxed) {
-            clocksource::refresh_clock();
+            // clocksource::refresh_clock();
             sleep(Duration::from_millis(1)).await;
             let _ = log.flush();
         }

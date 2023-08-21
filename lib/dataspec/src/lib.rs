@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use histogram::CompactHistogram;
+use histogram::compact::Histogram;
 
 #[derive(Serialize, Deserialize)]
 pub struct Connections {
@@ -48,7 +48,7 @@ pub struct ClientStats {
     pub connections: Connections,
     pub requests: Requests,
     pub responses: Responses,
-    pub request_latency: CompactHistogram,
+    pub request_latency: Histogram,
 }
 
 #[derive(Serialize, Deserialize)]

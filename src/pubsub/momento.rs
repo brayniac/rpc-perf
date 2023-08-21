@@ -120,10 +120,10 @@ async fn subscriber_task(client: Arc<TopicClient>, cache_name: String, topic: St
                             v[16], v[17], v[18], v[19], v[20], v[21], v[22], v[23],
                         ]);
 
-                        let latency = now_unix - UnixInstant::from_nanos(ts);
-                        let then = now - latency;
+                        let latency = now_unix.duration_since(UnixInstant::EPOCH).as_nanos() - ts;
+                        let then = now - Duration::from_nanos(latency);
 
-                        let _ = PUBSUB_LATENCY.increment(then, latency.as_nanos());
+                        let _ = PUBSUB_LATENCY.increment(then, latency);
 
                         PUBSUB_RECEIVE.increment();
                         PUBSUB_RECEIVE_OK.increment();
@@ -231,7 +231,7 @@ async fn publisher_task(
         let now_unix = UnixInstant::now();
         let result = match work_item {
             WorkItem::Publish { topic, mut message } => {
-                let ts = (now_unix - UnixInstant::from_nanos(0))
+                let ts = (now_unix - UnixInstant::EPOCH)
                     .as_nanos()
                     .to_be_bytes();
 

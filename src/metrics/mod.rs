@@ -131,12 +131,12 @@ macro_rules! heatmap {
             name = $name,
             crate = metriken
         )]
-        pub static $ident: metriken::Heatmap = metriken::Heatmap::new(
+        pub static $ident: metriken::Histogram = metriken::Histogram::new(
             0,
-            8,
+            7,
             64,
-            core::time::Duration::from_secs(60),
             core::time::Duration::from_secs(1),
+            60,
         );
     };
     ($ident:ident, $name:tt, $description:tt) => {
@@ -145,12 +145,12 @@ macro_rules! heatmap {
             description = $description,
             crate = metriken
         )]
-        pub static $ident: metriken::Heatmap = metriken::Heatmap::new(
+        pub static $ident: metriken::Histogram = metriken::Histogram::new(
             0,
-            8,
+            7,
             64,
-            core::time::Duration::from_secs(60),
             core::time::Duration::from_secs(1),
+            60,
         );
     };
 }
