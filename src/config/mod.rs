@@ -49,14 +49,20 @@ impl Config {
                 std::process::exit(1);
             }
         }
-        let toml = toml::from_str(&content);
-        match toml {
-            Ok(toml) => toml,
+        let config: Self = match toml::from_str(&content) {
+            Ok(config) => config,
             Err(error) => {
                 eprintln!("Failed to parse TOML config: {filename}\n{error}");
                 std::process::exit(1);
             }
+        };
+
+        if config.general().interval() > Duration::from_secs(3600) {
+            eprintln!("The reporting interval cannot be more than one hour");
+            std::process::exit(1);
         }
+
+        config
     }
 
     pub fn general(&self) -> &General {

@@ -135,8 +135,8 @@ macro_rules! heatmap {
             0,
             7,
             64,
-            core::time::Duration::from_millis(100),
-            120,
+            core::time::Duration::from_secs(1),
+            3600,
         );
     };
     ($ident:ident, $name:tt, $description:tt) => {
@@ -149,8 +149,8 @@ macro_rules! heatmap {
             0,
             7,
             64,
-            core::time::Duration::from_millis(100),
-            120,
+            core::time::Duration::from_secs(1),
+            3600,
         );
     };
 }
