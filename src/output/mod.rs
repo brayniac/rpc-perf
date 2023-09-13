@@ -153,7 +153,9 @@ fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
         Some(Err(e)) => {
             eprintln!("Error: {e}");
         }
-        _ => {}
+        None => {
+            eprintln!("None");
+        }
     }
 
     output!("{latencies}");
