@@ -138,16 +138,22 @@ fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
 
     let percentiles: Vec<f64> = PERCENTILES.iter().map(|v| v.1).collect();
 
-    if let Some(Ok(snapshot)) = RESPONSE_LATENCY.snapshot_between(start..end) {
-        if let Ok(result) = snapshot.percentiles(&percentiles) {
-            for (label, value) in PERCENTILES
-                .iter()
-                .map(|v| v.0)
-                .zip(result.iter().map(|(_, b)| b.end()))
-            {
-                latencies.push_str(&format!(" {label}: {value}"))
+    match RESPONSE_LATENCY.snapshot_between(start..end) {
+        Some(Ok(snapshot)) => {
+            if let Ok(result) = snapshot.percentiles(&percentiles) {
+                for (label, value) in PERCENTILES
+                    .iter()
+                    .map(|v| v.0)
+                    .zip(result.iter().map(|(_, b)| b.end()))
+                {
+                    latencies.push_str(&format!(" {label}: {value}"))
+                }
             }
         }
+        Some(Err(e)) => {
+            eprintln!("Error: {e}");
+        }
+        _ => {}
     }
 
     output!("{latencies}");
