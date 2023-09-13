@@ -369,7 +369,7 @@ dependencies = [
 [[package]]
 name = "clocksource"
 version = "0.7.1"
-source = "git+https://github.com/brayniac/rustcommon?branch=free-running#7c94bb333d97a669d841249274c2ba58d81572dc"
+source = "git+https://github.com/brayniac/rustcommon?branch=free-running#81788934cec13f602db3dfd33155be08ca755294"
 dependencies = [
  "libc",
  "time",
@@ -802,7 +802,7 @@ checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 [[package]]
 name = "histogram"
 version = "0.8.0"
-source = "git+https://github.com/brayniac/rustcommon?branch=free-running#7c94bb333d97a669d841249274c2ba58d81572dc"
+source = "git+https://github.com/brayniac/rustcommon?branch=free-running#81788934cec13f602db3dfd33155be08ca755294"
 dependencies = [
  "clocksource 0.7.1",
  "thiserror",
@@ -1161,7 +1161,7 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "metriken"
 version = "0.2.3"
-source = "git+https://github.com/brayniac/rustcommon?branch=free-running#7c94bb333d97a669d841249274c2ba58d81572dc"
+source = "git+https://github.com/brayniac/rustcommon?branch=free-running#81788934cec13f602db3dfd33155be08ca755294"
 dependencies = [
  "histogram",
  "linkme",
@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "metriken-derive"
 version = "0.2.0"
-source = "git+https://github.com/brayniac/rustcommon?branch=free-running#7c94bb333d97a669d841249274c2ba58d81572dc"
+source = "git+https://github.com/brayniac/rustcommon?branch=free-running#81788934cec13f602db3dfd33155be08ca755294"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -1830,7 +1830,7 @@ dependencies = [
 [[package]]
 name = "ringlog"
 version = "0.2.0"
-source = "git+https://github.com/brayniac/rustcommon?branch=free-running#7c94bb333d97a669d841249274c2ba58d81572dc"
+source = "git+https://github.com/brayniac/rustcommon?branch=free-running#81788934cec13f602db3dfd33155be08ca755294"
 dependencies = [
  "ahash",
  "clocksource 0.7.1",
