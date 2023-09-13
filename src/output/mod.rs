@@ -50,7 +50,7 @@ pub fn log(config: &Config) {
 
             // output the client stats
             if client {
-                client_stats(&mut snapshot, elapsed);
+                client_stats(&mut snapshot, elapsed, config.general().interval());
             }
 
             // output the pubsub stats
@@ -65,9 +65,9 @@ pub fn log(config: &Config) {
 }
 
 /// Outputs client stats and returns the number of requests successfully sent
-fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
+fn client_stats(snapshot: &mut Snapshot, elapsed: f64, interval: Duration) -> u64 {
     let end = UnixInstant::now();
-    let start = end - Duration::from_nanos((elapsed * 1_000_000_000.0) as u64);
+    let start = end - interval;
 
     let connect_ok = Metrics::ConnectOk.delta(snapshot);
     let connect_ex = Metrics::ConnectEx.delta(snapshot);
