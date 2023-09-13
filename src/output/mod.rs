@@ -5,7 +5,7 @@ use ahash::{HashMap, HashMapExt};
 use ratelimit::Ratelimiter;
 use std::io::{BufWriter, Write};
 
-use histogram::compact::Histogram as CompactHistogram;
+// use histogram::compact::Histogram as CompactHistogram;
 
 #[macro_export]
 macro_rules! output {
@@ -66,6 +66,9 @@ pub fn log(config: &Config) {
 
 /// Outputs client stats and returns the number of requests successfully sent
 fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
+    let end = UnixInstant::now();
+    let start = end - Duration::from_nanos((elapsed * 1_000_000_000.0) as u64);
+
     let connect_ok = Metrics::ConnectOk.delta(snapshot);
     let connect_ex = Metrics::ConnectEx.delta(snapshot);
     let connect_timeout = Metrics::ConnectTimeout.delta(snapshot);
@@ -132,12 +135,19 @@ fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
     );
 
     let mut latencies = "Client Response Latency (us):".to_owned();
-    for (label, percentile) in PERCENTILES {
-        let value = match RESPONSE_LATENCY.percentile(*percentile) {
-            Some(Ok(b)) => format!("{}", b.upper() / 1000),
-            _ => "ERR".to_string(),
-        };
-        latencies.push_str(&format!(" {label}: {value}"))
+
+    let percentiles: Vec<f64> = PERCENTILES.iter().map(|v| v.1).collect();
+
+    if let Some(Ok(snapshot)) = RESPONSE_LATENCY.snapshot_between(start..end) {
+        if let Ok(result) = snapshot.percentiles(&percentiles) {
+            for (label, value) in PERCENTILES
+                .iter()
+                .map(|v| v.0)
+                .zip(result.iter().map(|(_, b)| b.end()))
+            {
+                latencies.push_str(&format!(" {label}: {value}"))
+            }
+        }
     }
 
     output!("{latencies}");
@@ -147,6 +157,9 @@ fn client_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
 
 /// Output pubsub metrics and return the number of successful publish operations
 fn pubsub_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
+    let end = UnixInstant::now();
+    let start = end - Duration::from_nanos((elapsed * 1_000_000_000.0) as u64);
+
     // publisher stats
     let pubsub_tx_ex = Metrics::PubsubTxEx.delta(snapshot);
     let pubsub_tx_ok = Metrics::PubsubTxOk.delta(snapshot);
@@ -196,23 +209,37 @@ fn pubsub_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
     );
 
     let mut latencies = "Pubsub Publish Latency (us):".to_owned();
-    for (label, percentile) in PERCENTILES {
-        let value = match RESPONSE_LATENCY.percentile(*percentile) {
-            Some(Ok(b)) => format!("{}", b.upper() / 1000),
-            _ => "ERR".to_string(),
-        };
-        latencies.push_str(&format!(" {label}: {value}"))
+
+    let percentiles: Vec<f64> = PERCENTILES.iter().map(|v| v.1).collect();
+
+    if let Some(Ok(snapshot)) = PUBSUB_PUBLISH_LATENCY.snapshot_between(start..end) {
+        if let Ok(result) = snapshot.percentiles(&percentiles) {
+            for (label, value) in PERCENTILES
+                .iter()
+                .map(|v| v.0)
+                .zip(result.iter().map(|(_, b)| b.end()))
+            {
+                latencies.push_str(&format!(" {label}: {value}"))
+            }
+        }
     }
 
     output!("{latencies}");
 
     let mut latencies = "Pubsub End-to-End Latency (us):".to_owned();
-    for (label, percentile) in PERCENTILES {
-        let value = match RESPONSE_LATENCY.percentile(*percentile) {
-            Some(Ok(b)) => format!("{}", b.upper() / 1000),
-            _ => "ERR".to_string(),
-        };
-        latencies.push_str(&format!(" {label}: {value}"))
+
+    let percentiles: Vec<f64> = PERCENTILES.iter().map(|v| v.1).collect();
+
+    if let Some(Ok(snapshot)) = PUBSUB_LATENCY.snapshot_between(start..end) {
+        if let Ok(result) = snapshot.percentiles(&percentiles) {
+            for (label, value) in PERCENTILES
+                .iter()
+                .map(|v| v.0)
+                .zip(result.iter().map(|(_, b)| b.end()))
+            {
+                latencies.push_str(&format!(" {label}: {value}"))
+            }
+        }
     }
 
     output!("{latencies}");
@@ -220,14 +247,14 @@ fn pubsub_stats(snapshot: &mut Snapshot, elapsed: f64) -> u64 {
     pubsub_tx_ok
 }
 
-// gets the non-zero buckets for the most recent window in the heatmap
-fn heatmap_to_buckets(heatmap: &Histogram) -> CompactHistogram {
-    if let Some(Ok(histogram)) = heatmap.distribution_last(Duration::from_secs(1)) {
-        CompactHistogram::from(&histogram)
-    } else {
-        CompactHistogram::default()
-    }
-}
+// // gets the non-zero buckets for the most recent window in the heatmap
+// fn heatmap_to_buckets(heatmap: &Histogram) -> CompactHistogram {
+//     if let Some(Ok(histogram)) = heatmap.distribution_last(Duration::from_secs(1)) {
+//         CompactHistogram::from(&histogram)
+//     } else {
+//         CompactHistogram::default()
+//     }
+// }
 
 pub fn json(config: Config, ratelimit: Option<&Ratelimiter>) {
     if config.general().json_output().is_none() {
@@ -304,7 +331,7 @@ pub fn json(config: Config, ratelimit: Option<&Ratelimiter>) {
                     connections,
                     requests,
                     responses,
-                    request_latency: heatmap_to_buckets(&REQUEST_LATENCY),
+                    // request_latency: heatmap_to_buckets(&REQUEST_LATENCY),
                 },
                 pubsub: PubsubStats {
                     publishers: Publishers {

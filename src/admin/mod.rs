@@ -97,7 +97,7 @@ mod filters {
 pub enum Metric<'a> {
     Counter(&'a str, Option<&'a str>, u64),
     Gauge(&'a str, Option<&'a str>, i64),
-    Percentiles(&'a str, Option<&'a str>, Vec<(&'a str, f64, Option<u64>)>),
+    Percentiles(&'a str, Option<&'a str>, Vec<(&'a str, f64, u64)>),
 }
 
 impl<'a> Metric<'a> {
@@ -115,6 +115,9 @@ impl<'a> TryFrom<&'a metriken::MetricEntry> for Metric<'a> {
     type Error = ();
 
     fn try_from(metric: &'a metriken::MetricEntry) -> Result<Self, ()> {
+        let end = UnixInstant::now();
+        let start = end - Duration::from_secs(60);
+
         let any = match metric.as_any() {
             Some(any) => any,
             None => {
@@ -134,22 +137,25 @@ impl<'a> TryFrom<&'a metriken::MetricEntry> for Metric<'a> {
                 metric.description(),
                 gauge.value(),
             ))
-        } else if let Some(heatmap) = any.downcast_ref::<Histogram>() {
-            let percentiles = PERCENTILES
-                .iter()
-                .map(|(label, percentile)| {
-                    let value = match heatmap.percentile(*percentile) {
-                        Some(Ok(bucket)) => Some(bucket.upper()),
-                        _ => None,
-                    };
-                    (*label, *percentile, value)
-                })
-                .collect();
+        } else if let Some(histogram) = any.downcast_ref::<Histogram>() {
+            let percentiles: Vec<f64> = PERCENTILES.iter().map(|v| v.1).collect();
+
+            let mut data: Vec<(&str, f64, u64)> = Vec::new();
+
+            if let Some(Ok(snapshot)) = histogram.snapshot_between(start..end) {
+                if let Ok(result) = snapshot.percentiles(&percentiles) {
+                    for ((label, percentile), value) in
+                        PERCENTILES.iter().zip(result.iter().map(|(_, b)| b.end()))
+                    {
+                        data.push((*label, *percentile, value));
+                    }
+                }
+            }
 
             Ok(Metric::Percentiles(
                 metric.name(),
                 metric.description(),
-                percentiles,
+                data,
             ))
         } else {
             Err(())
@@ -212,18 +218,16 @@ mod handlers {
                 }
                 Metric::Percentiles(name, description, percentiles) => {
                     for (_label, percentile, value) in percentiles {
-                        if let Some(value) = value {
-                            if let Some(description) = description {
-                                data.push(format!(
-                                    "# TYPE {name} gauge\n# HELP {name} {description}\n{name}{{percentile=\"{:02}\"}} {value}",
-                                    percentile,
-                                ));
-                            } else {
-                                data.push(format!(
-                                    "# TYPE {name} gauge\n{name}{{percentile=\"{:02}\"}} {value}",
-                                    percentile,
-                                ));
-                            }
+                        if let Some(description) = description {
+                            data.push(format!(
+                                "# TYPE {name} gauge\n# HELP {name} {description}\n{name}{{percentile=\"{:02}\"}} {value}",
+                                percentile,
+                            ));
+                        } else {
+                            data.push(format!(
+                                "# TYPE {name} gauge\n{name}{{percentile=\"{:02}\"}} {value}",
+                                percentile,
+                            ));
                         }
                     }
                 }
@@ -266,9 +270,7 @@ mod handlers {
                 }
                 Metric::Percentiles(name, _description, percentiles) => {
                     for (label, _percentile, value) in percentiles {
-                        if let Some(value) = value {
-                            data.push(format!("\"{name}/{label}\": {value}",));
-                        }
+                        data.push(format!("\"{name}/{label}\": {value}",));
                     }
                 }
             }
@@ -311,9 +313,7 @@ mod handlers {
                 }
                 Metric::Percentiles(name, _description, percentiles) => {
                     for (label, _percentile, value) in percentiles {
-                        if let Some(value) = value {
-                            data.push(format!("{name}/{label}: {value}",));
-                        }
+                        data.push(format!("{name}/{label}: {value}",));
                     }
                 }
             }

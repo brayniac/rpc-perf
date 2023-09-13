@@ -16,7 +16,7 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [workspace.dependencies]
-histogram = { git = "https://github.com/brayniac/rustcommon", branch = "free-running", features = ["serde"] }
+histogram = { git = "https://github.com/brayniac/rustcommon", branch = "free-running" }
 serde = "1.0.144"
 
 [dependencies]

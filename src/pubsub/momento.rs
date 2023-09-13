@@ -231,9 +231,7 @@ async fn publisher_task(
         let now_unix = UnixInstant::now();
         let result = match work_item {
             WorkItem::Publish { topic, mut message } => {
-                let ts = (now_unix - UnixInstant::EPOCH)
-                    .as_nanos()
-                    .to_be_bytes();
+                let ts = (now_unix - UnixInstant::EPOCH).as_nanos().to_be_bytes();
 
                 // write the current unix time into the message
                 [
