@@ -135,7 +135,7 @@ macro_rules! heatmap {
             0,
             7,
             64,
-            core::time::Duration::from_secs(1),
+            core::time::Duration::from_millis(100),
             120,
         );
     };
@@ -149,7 +149,7 @@ macro_rules! heatmap {
             0,
             7,
             64,
-            core::time::Duration::from_secs(1),
+            core::time::Duration::from_millis(100),
             120,
         );
     };
