@@ -2,7 +2,7 @@ use crate::workload::ClientRequest;
 use crate::workload::ClientWorkItem as WorkItem;
 use crate::*;
 use ::momento::MomentoError;
-use async_channel::Receiver;
+use async_std::channel::{Receiver, SendError, RecvError};
 use std::io::{Error, ErrorKind, Result};
 use std::time::Instant;
 use tokio::io::*;

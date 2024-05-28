@@ -138,11 +138,11 @@ impl Generator {
             loop {
                 RATELIMIT_DROPPED.set(ratelimiter.dropped());
 
-                if ratelimiter.try_wait().is_ok() {
+                if let Err(s) = ratelimiter.try_wait() {
+                    std::thread::sleep(s);
+                } else {
                     break;
                 }
-
-                std::thread::sleep(std::time::Duration::from_micros(100));
             }
         }
 

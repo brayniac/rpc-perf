@@ -10,22 +10,22 @@ use std::future::Future;
 
 #[derive(Clone)]
 struct Queue<T> {
-    tx: async_channel::Sender<T>,
-    rx: async_channel::Receiver<T>,
+    tx: Sender<T>,
+    rx: Receiver<T>,
 }
 
 impl<T> Queue<T> {
     pub fn new(size: usize) -> Self {
-        let (tx, rx) = async_channel::bounded::<T>(size);
+        let (tx, rx) = bounded::<T>(size);
 
         Self { tx, rx }
     }
 
-    pub async fn send(&self, item: T) -> std::result::Result<(), async_channel::SendError<T>> {
+    pub async fn send(&self, item: T) -> std::result::Result<(), SendError<T>> {
         self.tx.send(item).await
     }
 
-    pub async fn recv(&self) -> std::result::Result<T, async_channel::RecvError> {
+    pub async fn recv(&self) -> std::result::Result<T, RecvError> {
         self.rx.recv().await
     }
 }
