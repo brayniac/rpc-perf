@@ -171,7 +171,7 @@ async fn publisher_task(
 
     while RUNNING.load(Ordering::Relaxed) {
         let work_item = work_receiver
-            .recv_async()
+            .recv()
             .await
             .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
 

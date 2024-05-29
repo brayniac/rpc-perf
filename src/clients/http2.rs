@@ -21,12 +21,12 @@ impl<T> Queue<T> {
         Self { tx, rx }
     }
 
-    pub async fn send(&self, item: T) -> std::result::Result<(), SendError<T>> {
-        self.tx.send_async(item).await
+    pub async fn send(&self, item: T) -> std::result::Result<(), SendError> {
+        self.tx.send(item).await
     }
 
     pub async fn recv(&self) -> std::result::Result<T, RecvError> {
-        self.rx.recv_async().await
+        self.rx.recv().await
     }
 }
 
@@ -158,7 +158,7 @@ async fn task(
         let mut s = sender.take().unwrap();
 
         let work_item = work_receiver
-            .recv_async()
+            .recv()
             .await
             .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
 

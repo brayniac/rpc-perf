@@ -761,7 +761,7 @@ pub async fn reconnect(work_sender: Sender<ClientWorkItem>, config: Config) -> R
     while RUNNING.load(Ordering::Relaxed) {
         match ratelimiter.try_wait() {
             Ok(_) => {
-                let _ = work_sender.send_async(ClientWorkItem::Reconnect).await;
+                let _ = work_sender.send(ClientWorkItem::Reconnect).await;
             }
             Err(d) => {
                 std::thread::sleep(d);

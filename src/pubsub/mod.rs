@@ -3,7 +3,6 @@ use crate::workload::Component;
 use crate::workload::PublisherWorkItem as WorkItem;
 use crate::*;
 use ahash::RandomState;
-use flume::Receiver;
 use std::io::{Error, ErrorKind, Result};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::runtime::Runtime;
