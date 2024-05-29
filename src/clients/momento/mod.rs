@@ -64,7 +64,7 @@ async fn task(
 
     while RUNNING.load(Ordering::Relaxed) {
         let work_item = work_receiver
-            .recv()
+            .recv_async()
             .await
             .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
 
