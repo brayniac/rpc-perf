@@ -1,30 +1,55 @@
 use super::*;
 
+use ::momento::cache::{CollectionTtl, DictionarySetFieldRequest, DictionarySetFieldsRequest};
+
 /// Set the value for a field in a hash (dictionary).
 ///
 /// NOTE: if a TTL is specified, this command will not refresh the TTL for the
 /// collection.
 pub async fn hash_set(
-    client: &mut SimpleCacheClient,
+    client: &mut CacheClient,
     config: &Config,
     cache_name: &str,
     request: workload::client::HashSet,
 ) -> std::result::Result<(), ResponseError> {
+    if request.data.is_empty() {
+        panic!("empty data for hash set");
+    }
+
     HASH_SET.increment();
-    let data: HashMap<Vec<u8>, Vec<u8>> = request
-        .data
-        .iter()
-        .map(|(k, v)| (k.to_vec(), v.to_vec()))
-        .collect();
-    let result = timeout(
-        config.client().unwrap().request_timeout(),
-        client.dictionary_set(
-            cache_name,
-            &*request.key,
-            data,
-            CollectionTtl::new(request.ttl, false),
-        ),
-    )
-    .await;
-    record_result!(result, HASH_SET)
+
+    if request.data.len() == 1 {
+        let (field, value) = request.data.iter().next().unwrap();
+
+        let field: Vec<u8> = field.to_vec();
+        let value: Vec<u8> = value.to_vec();
+
+        let r = DictionarySetFieldRequest::new(cache_name, &*request.key, field, value)
+            .ttl(CollectionTtl::new(request.ttl, false));
+
+        let result = timeout(
+            config.client().unwrap().request_timeout(),
+            client.send_request(r),
+        )
+        .await;
+
+        record_result!(result, HASH_SET)
+    } else {
+        let d: Vec<(Vec<u8>, Vec<u8>)> = request
+            .data
+            .iter()
+            .map(|(k, v)| (k.to_vec(), v.to_vec()))
+            .collect();
+
+        let r = DictionarySetFieldsRequest::new(cache_name, &*request.key, d)
+            .ttl(CollectionTtl::new(request.ttl, false));
+
+        let result = timeout(
+            config.client().unwrap().request_timeout(),
+            client.send_request(r),
+        )
+        .await;
+
+        record_result!(result, HASH_SET)
+    }
 }
