@@ -11,7 +11,7 @@ pub async fn set(
 ) -> std::result::Result<(), ResponseError> {
     SET.increment();
 
-    let mut r = SetRequest::new(&*cache_name, &*request.key, &*request.value);
+    let mut r = SetRequest::new(cache_name, &*request.key, &*request.value);
 
     if let Some(ttl) = request.ttl {
         r = r.ttl(ttl);
