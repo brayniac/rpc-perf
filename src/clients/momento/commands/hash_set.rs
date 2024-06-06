@@ -21,10 +21,7 @@ pub async fn hash_set(
     if request.data.len() == 1 {
         let (field, value) = request.data.iter().next().unwrap();
 
-        let field: Vec<u8> = field.to_vec();
-        let value: Vec<u8> = value.to_vec();
-
-        let r = DictionarySetFieldRequest::new(cache_name, &*request.key, field, value)
+        let r = DictionarySetFieldRequest::new(cache_name, &*request.key, field.to_vec(), value.to_vec())
             .ttl(CollectionTtl::new(request.ttl, false));
 
         let result = timeout(
