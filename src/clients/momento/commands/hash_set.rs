@@ -21,8 +21,13 @@ pub async fn hash_set(
     if request.data.len() == 1 {
         let (field, value) = request.data.iter().next().unwrap();
 
-        let r = DictionarySetFieldRequest::new(cache_name, &*request.key, field.to_vec(), value.to_vec())
-            .ttl(CollectionTtl::new(request.ttl, false));
+        let r = DictionarySetFieldRequest::new(
+            cache_name,
+            &*request.key,
+            field.to_vec(),
+            value.to_vec(),
+        )
+        .ttl(CollectionTtl::new(request.ttl, false));
 
         let result = timeout(
             config.client().unwrap().request_timeout(),
