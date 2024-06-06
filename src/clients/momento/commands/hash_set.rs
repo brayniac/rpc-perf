@@ -19,13 +19,13 @@ pub async fn hash_set(
     HASH_SET.increment();
 
     if request.data.len() == 1 {
-        let (field, value) = request.data.iter().next().unwrap();
+        let (field, value) = request.data.into_iter().next().unwrap();
 
         let r = DictionarySetFieldRequest::new(
             cache_name,
             &*request.key,
-            field.to_vec(),
-            value.to_vec(),
+            &*field,
+            value,
         )
         .ttl(CollectionTtl::new(request.ttl, false));
 
@@ -39,8 +39,8 @@ pub async fn hash_set(
     } else {
         let d: Vec<(Vec<u8>, Vec<u8>)> = request
             .data
-            .iter()
-            .map(|(k, v)| (k.to_vec(), v.to_vec()))
+            .into_iter()
+            .map(|(k, v)| (k.to_vec(), v))
             .collect();
 
         let r = DictionarySetFieldsRequest::new(cache_name, &*request.key, d)

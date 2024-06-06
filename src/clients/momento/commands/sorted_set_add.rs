@@ -17,7 +17,7 @@ pub async fn sorted_set_add(
     if request.members.len() == 1 {
         let (member, score) = request.members.first().unwrap();
 
-        let r = SortedSetPutElementRequest::new(cache_name, &*request.key, member.to_vec(), *score)
+        let r = SortedSetPutElementRequest::new(cache_name, &*request.key, &**member, *score)
             .ttl(CollectionTtl::new(request.ttl, false));
 
         let result = timeout(
@@ -30,8 +30,8 @@ pub async fn sorted_set_add(
     } else {
         let d: Vec<(Vec<u8>, f64)> = request
             .members
-            .iter()
-            .map(|(m, s)| (m.to_vec(), *s))
+            .into_iter()
+            .map(|(m, s)| (m.to_vec(), s))
             .collect();
 
         let r = SortedSetPutElementsRequest::new(cache_name, &*request.key, d)
