@@ -89,19 +89,17 @@ impl Generator {
     pub fn new(config: &Config) -> Self {
         let ratelimiter = config.workload().ratelimit().start().map(|rate| {
             let rate = rate.get();
-            let amount = (rate as f64 / 1_000_000.0).ceil() as u64;
+            let amount = 1;
             RATELIMIT_CURR.set(rate as i64);
 
             // even though we might not have nanosecond level clock resolution,
             // by using a nanosecond level duration, we achieve more accurate
             // ratelimits.
-            let interval = Duration::from_nanos(1_000_000_000 / (rate / amount));
-
-            let capacity = std::cmp::max(100, amount);
+            let interval = Duration::from_nanos(1_000_000_000 / rate);
 
             Arc::new(
                 Ratelimiter::builder(amount, interval)
-                    .max_tokens(capacity)
+                    .max_tokens(1)
                     .build()
                     .expect("failed to initialize ratelimiter"),
             )
@@ -901,19 +899,17 @@ pub async fn reconnect<TRequestKind>(
 
     let ratelimiter = config.client().unwrap().reconnect_rate().map(|rate| {
         let rate = rate.get();
-        let amount = (rate as f64 / 1_000_000.0).ceil() as u64;
+        let amount = 1;
         RATELIMIT_CURR.set(rate as i64);
 
         // even though we might not have nanosecond level clock resolution,
         // by using a nanosecond level duration, we achieve more accurate
         // ratelimits.
-        let interval = Duration::from_nanos(1_000_000_000 / (rate / amount));
-
-        let capacity = std::cmp::max(100, amount);
+        let interval = Duration::from_nanos(1_000_000_000 / rate);
 
         Arc::new(
             Ratelimiter::builder(amount, interval)
-                .max_tokens(capacity)
+                .max_tokens(1)
                 .build()
                 .expect("failed to initialize ratelimiter"),
         )
