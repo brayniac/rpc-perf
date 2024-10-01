@@ -135,9 +135,9 @@ fn main() {
     }
 
     // TODO: figure out what a reasonable size is here
-    let (client_sender, client_receiver) = bounded(128);
-    let (pubsub_sender, pubsub_receiver) = bounded(128);
-    let (store_sender, store_receiver) = bounded(128);
+    let (client_sender, client_receiver) = bounded(16);
+    let (pubsub_sender, pubsub_receiver) = bounded(16);
+    let (store_sender, store_receiver) = bounded(16);
 
     output!("Protocol: {:?}", config.general().protocol());
 
