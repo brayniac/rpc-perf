@@ -17,6 +17,8 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use zipf::ZipfDistribution;
 
+mod fieldgen;
+
 pub mod client;
 mod publisher;
 
