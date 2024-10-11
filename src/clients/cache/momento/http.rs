@@ -248,7 +248,9 @@ async fn task(
 
                                     RESPONSE_RATELIMITED.increment();
                                 }
-                                _ => {
+                                other => {
+                                    debug!("got error code for get request: {other}");
+
                                     GET_EX.increment();
 
                                     RESPONSE_EX.increment();
@@ -341,7 +343,9 @@ async fn task(
 
                                 RESPONSE_RATELIMITED.increment();
                             }
-                            _ => {
+                            other => {
+                                debug!("got error code for set request: {other}");
+
                                 SET_EX.increment();
 
                                 RESPONSE_EX.increment();
@@ -426,7 +430,9 @@ async fn task(
 
                                     RESPONSE_RATELIMITED.increment();
                                 }
-                                _ => {
+                                other => {
+                                    debug!("got error code for delete request: {other}");
+
                                     DELETE_EX.increment();
 
                                     RESPONSE_EX.increment();
