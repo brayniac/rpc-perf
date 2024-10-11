@@ -251,6 +251,7 @@ async fn task(
                                 other => {
                                     debug!("got error code for get request: {other}");
 
+
                                     GET_EX.increment();
 
                                     RESPONSE_EX.increment();
@@ -344,7 +345,8 @@ async fn task(
                                 RESPONSE_RATELIMITED.increment();
                             }
                             other => {
-                                debug!("got error code for set request: {other}");
+                                info!("got error code for set request: {other}");
+                                info!("error: {}", std::str::from_utf8(&buffer).unwrap());
 
                                 SET_EX.increment();
 
