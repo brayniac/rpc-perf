@@ -135,17 +135,50 @@ fn main() {
         });
     }
 
-    let (client_sender, client_receiver) =
-        bounded(config.client().map(|c| c.threads() * 2).unwrap_or(1));
-    let (pubsub_sender, pubsub_receiver) = bounded(
-        config
-            .pubsub()
-            .map(|c| c.publisher_threads() * 2)
-            .unwrap_or(1),
-    );
-    let (store_sender, store_receiver) =
-        bounded(config.storage().map(|c| c.threads() * 2).unwrap_or(1));
-    let (oltp_sender, oltp_receiver) = bounded(config.oltp().map(|c| c.threads() * 2).unwrap_or(1));
+    let ratelimited = config.workload().ratelimit().start().is_some();
+
+    let (client_sender, client_receiver) = {
+        let depth = if ratelimited {
+            config.client().map(|c| c.threads() * 2).unwrap_or(1)
+        } else {
+            1024
+        };
+
+        bounded(depth)
+    };
+
+    let (pubsub_sender, pubsub_receiver) = {
+        let depth = if ratelimited {
+            config
+                .pubsub()
+                .map(|c| c.publisher_threads() * 2)
+                .unwrap_or(1)
+        } else {
+            1024
+        };
+
+        bounded(depth)
+    };
+
+    let (store_sender, store_receiver) = {
+        let depth = if ratelimited {
+            config.storage().map(|c| c.threads() * 2).unwrap_or(1)
+        } else {
+            1024
+        };
+
+        bounded(depth)
+    };
+
+    let (oltp_sender, oltp_receiver) = {
+        let depth = if ratelimited {
+            config.oltp().map(|c| c.threads() * 2).unwrap_or(1)
+        } else {
+            1024
+        };
+
+        bounded(depth)
+    };
 
     output!("Protocol: {:?}", config.general().protocol());
 
