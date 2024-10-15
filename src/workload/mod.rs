@@ -1,3 +1,4 @@
+use rand::rngs::SmallRng;
 use super::*;
 use config::{Command, RampCompletionAction, RampType, ValueKind, Verb};
 use flate2::write::GzEncoder;
@@ -60,7 +61,7 @@ pub fn launch_workload(
         let generator = generator.clone();
 
         // generate the seed for this workload thread
-        let mut seed = [0; 64];
+        let mut seed = [0; 32];
         rng.fill_bytes(&mut seed);
 
         workload_rt.spawn(async move {
@@ -70,7 +71,7 @@ pub fn launch_workload(
                     &pubsub_sender,
                     &store_sender,
                     &oltp_sender,
-                    Xoshiro512PlusPlus::from_seed(Seed512(seed)),
+                    SmallRng::from_seed(seed),
                 ).await;
             }
         });
@@ -156,7 +157,7 @@ impl Generator {
         pubsub_sender: &Sender<PublisherWorkItem>,
         store_sender: &Sender<ClientWorkItemKind<StoreClientRequest>>,
         oltp_sender: &Sender<ClientWorkItemKind<OltpRequest>>,
-        mut rng: Xoshiro512PlusPlus,
+        mut rng: SmallRng,
     ) {
         if let Some(ref ratelimiter) = self.ratelimiter {
             loop {
@@ -653,17 +654,17 @@ impl Keyspace {
         let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
 
         // generate the seed for key PRNG
-        let mut raw_seed = [0_u8; 64];
-        rng.fill_bytes(&mut raw_seed);
-        let key_seed = Seed512(raw_seed);
+        let mut key_seed = [0_u8; 32];
+        rng.fill_bytes(&mut key_seed);
+        // let key_seed = Seed512(raw_seed);
 
         // generate the seed for inner key PRNG
-        let mut raw_seed = [0_u8; 64];
-        rng.fill_bytes(&mut raw_seed);
-        let inner_key_seed = Seed512(raw_seed);
+        let mut inner_key_seed = [0_u8; 32];
+        rng.fill_bytes(&mut inner_key_seed);
+        // let inner_key_seed = Seed512(raw_seed);
 
         // we use a predictable seed to generate the keys in the keyspace
-        let mut rng = Xoshiro512PlusPlus::from_seed(key_seed);
+        let mut rng = SmallRng::from_seed(key_seed);
         let mut keys = HashSet::with_capacity(nkeys);
         while keys.len() < nkeys {
             let key = (&mut rng)
@@ -684,7 +685,7 @@ impl Keyspace {
         let klen = keyspace.inner_keys_klen().unwrap_or(1);
 
         // we use a predictable seed to generate the keys in the keyspace
-        let mut rng = Xoshiro512PlusPlus::from_seed(inner_key_seed);
+        let mut rng = SmallRng::from_seed(inner_key_seed);
         let mut inner_keys = HashSet::with_capacity(nkeys);
         while inner_keys.len() < nkeys {
             let key = (&mut rng)
