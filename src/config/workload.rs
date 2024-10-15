@@ -23,6 +23,7 @@ pub struct Workload {
 pub enum ValueKind {
     I64,
     Bytes,
+    Zeros,
 }
 
 impl Workload {

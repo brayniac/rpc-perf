@@ -812,6 +812,9 @@ impl Keyspace {
                 rng.fill(&mut buf[0..self.value_random_bytes]);
                 buf
             }
+            ValueKind::Zeros => {
+                vec![0_u8; self.vlen]
+            }
         }
     }
 
@@ -922,6 +925,9 @@ impl Store {
                 let mut buf = vec![0_u8; self.vlen];
                 rng.fill(&mut buf[0..self.value_random_bytes]);
                 buf
+            }
+            ValueKind::Zeros => {
+                vec![0_u8; self.vlen]
             }
         }
     }
