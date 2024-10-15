@@ -177,7 +177,7 @@ impl Generator {
         match &self.components[self.component_dist.sample(rng)] {
             Component::Keyspace(keyspace) => {
                 if client_sender
-                    .try_send(self.generate_request(keyspace, rng))
+                    .send(self.generate_request(keyspace, rng))
                     .is_err()
                 {
                     REQUEST_DROPPED.increment();
@@ -185,7 +185,7 @@ impl Generator {
             }
             Component::Topics(topics) => {
                 if pubsub_sender
-                    .try_send(self.generate_pubsub(topics, rng))
+                    .send(self.generate_pubsub(topics, rng))
                     .is_err()
                 {
                     REQUEST_DROPPED.increment();
@@ -193,7 +193,7 @@ impl Generator {
             }
             Component::Store(store) => {
                 if store_sender
-                    .try_send(self.generate_store_request(store, rng))
+                    .send(self.generate_store_request(store, rng))
                     .is_err()
                 {
                     REQUEST_DROPPED.increment();
@@ -201,7 +201,7 @@ impl Generator {
             }
             Component::Oltp(oltp) => {
                 if oltp_sender
-                    .try_send(self.generate_oltp_request(oltp, rng))
+                    .send(self.generate_oltp_request(oltp, rng))
                     .is_err()
                 {
                     REQUEST_DROPPED.increment();
