@@ -107,6 +107,9 @@ mod filters {
 }
 
 pub mod handlers {
+    use metriken::Gauge;
+    use metriken::Counter;
+    use metriken::AtomicHistogram;
     use super::*;
     use core::convert::Infallible;
     use std::time::UNIX_EPOCH;
@@ -147,43 +150,96 @@ pub mod handlers {
 
             let name = metric.name();
 
-            match metric.value() {
-                Some(Value::Counter(value)) => {
-                    if let Some(description) = metric.description() {
-                        data.push(format!(
-                            "# TYPE {name} counter\n# HELP {name} {description}\n{name} {value}"
-                        ));
-                    } else {
-                        data.push(format!("# TYPE {name} counter\n{name} {value}"));
-                    }
+            let any = match metric.as_any() {
+                Some(any) => any,
+                None => {
+                    continue;
                 }
-                Some(Value::Gauge(value)) => {
-                    if let Some(description) = metric.description() {
-                        data.push(format!(
-                            "# TYPE {name} gauge\n# HELP {name} {description}\n{name} {value}"
-                        ));
-                    } else {
-                        data.push(format!("# TYPE {name} gauge\n{name} {value}"));
-                    }
-                }
-                Some(Value::Other(_)) => {
-                    let percentiles = metrics_snapshot.percentiles(metric.name());
+            };
 
-                    for (_label, percentile, value) in percentiles {
-                        if let Some(description) = metric.description() {
-                            data.push(format!(
-                                "# TYPE {name} gauge\n# HELP {name} {description}\n{name}{{percentile=\"{:02}\"}} {value} {timestamp}",
-                                percentile,
-                            ));
-                        } else {
-                            data.push(format!(
-                                "# TYPE {name} gauge\n{name}{{percentile=\"{:02}\"}} {value} {timestamp}",
-                                percentile,
-                            ));
-                        }
+            if let Some(counter) = any.downcast_ref::<Counter>() {
+                if let Some(description) = metric.description() {
+                    data.push(format!(
+                        "# TYPE {name} counter\n# HELP {name} {description}\n{name} {}",
+                        counter.value()
+                    ));
+                } else {
+                    data.push(format!("# TYPE {name} counter\n{name} {}",
+                        counter.value()
+                    ));
+                }
+            } else if let Some(gauge) = any.downcast_ref::<Gauge>() {
+                if let Some(description) = metric.description() {
+                    data.push(format!(
+                        "# TYPE {name} gauge\n# HELP {name} {description}\n{name} {}", gauge.value()
+                    ));
+                } else {
+                    data.push(format!("# TYPE {name} gauge\n{name} {}", gauge.value()));
+                }
+            } else if let Some(histogram) = any.downcast_ref::<AtomicHistogram>() {
+                let percentiles = metrics_snapshot.percentiles(metric.name());
+
+                for (_label, percentile, value) in percentiles {
+                    if let Some(description) = metric.description() {
+                        data.push(format!(
+                            "# TYPE {name} gauge\n# HELP {name} {description}\n{name}{{percentile=\"{:02}\"}} {value} {timestamp}",
+                            percentile,
+                        ));
+                    } else {
+                        data.push(format!(
+                            "# TYPE {name} gauge\n{name}{{percentile=\"{:02}\"}} {value} {timestamp}",
+                            percentile,
+                        ));
                     }
                 }
-                _ => continue,
+
+                if let Some(histogram) = histogram.load() {
+                    let current = 7;
+                    let target = 3;
+
+                    // downsample the histogram if necessary
+                    let downsampled: Option<histogram::Histogram> = if current == target {
+                        // the powers matched, we don't need to downsample
+                        None
+                    } else {
+                        Some(histogram.downsample(target).unwrap())
+                    };
+
+                    // reassign to either use the downsampled histogram or the original
+                    let histogram = if let Some(histogram) = downsampled.as_ref() {
+                        histogram
+                    } else {
+                        &histogram
+                    };
+
+                    // we need to export a total count (free-running)
+                    let mut count = 0;
+                    // we also need to export a total sum of all observations
+                    // which is also free-running
+                    let mut sum = 0;
+
+                    let mut entry = format!("# TYPE {name}_distribution histogram\n");
+                    for bucket in histogram {
+                        // add this bucket's sum of observations
+                        sum += bucket.count() * bucket.end();
+
+                        // add the count to the aggregate
+                        count += bucket.count();
+
+                        entry += &format!(
+                            "{name}_distribution_bucket{{le=\"{}\"}} {count} {timestamp}\n",
+                            bucket.end()
+                        );
+                    }
+
+                    entry +=
+                        &format!("{name}_distribution_bucket{{le=\"+Inf\"}} {count} {timestamp}\n");
+                    entry += &format!("{name}_distribution_count {count} {timestamp}\n");
+                    entry += &format!("{name}_distribution_sum {sum} {timestamp}");
+
+                    data.push(entry);
+                }
+
             }
         }
 
