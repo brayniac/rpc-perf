@@ -193,6 +193,10 @@ pub mod handlers {
                     }
                 }
 
+                let timestamp = clocksource::precise::UnixInstant::EPOCH
+                    .elapsed()
+                    .as_millis();
+
                 if let Some(histogram) = histogram.load() {
                     let current = 7;
                     let target = 3;
