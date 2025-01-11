@@ -6,7 +6,6 @@ use ::momento::storage::configurations::LowLatency;
 use ::momento::storage::PutRequest;
 use ::momento::*;
 use async_channel::Receiver;
-use paste::paste;
 use storage::GetResponse;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;

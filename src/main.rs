@@ -162,6 +162,12 @@ fn main() {
             .map(|c| c.threads() * QUEUE_DEPTH)
             .unwrap_or(1),
     );
+    let (leaderboard_sender, leaderboard_receiver) = bounded(
+        config
+            .leaderboard_client()
+            .map(|c| c.threads() * QUEUE_DEPTH)
+            .unwrap_or(1),
+    );
 
     output!("Protocol: {:?}", config.general().protocol());
 
@@ -189,6 +195,7 @@ fn main() {
         pubsub_sender,
         store_sender,
         oltp_sender,
+        leaderboard_sender,
     );
 
     // start client(s)
@@ -199,6 +206,9 @@ fn main() {
 
     // start OLTP clients
     let oltp_runtime = clients::oltp::launch(&config, oltp_receiver);
+
+    // start leaderboard clients
+    let leaderboard_runtime = clients::leaderboard::launch(&config, leaderboard_receiver);
 
     // start publisher(s) and subscriber(s)
     let mut pubsub_runtimes =
@@ -227,15 +237,19 @@ fn main() {
 
     // shutdown thread pools
 
-    if let Some(client_runtime) = client_runtime {
-        client_runtime.shutdown_timeout(std::time::Duration::from_millis(100));
+    if let Some(rt) = client_runtime {
+        rt.shutdown_timeout(std::time::Duration::from_millis(100));
     }
 
-    if let Some(store_runtime) = store_runtime {
-        store_runtime.shutdown_timeout(std::time::Duration::from_millis(100));
+    if let Some(rt) = store_runtime {
+        rt.shutdown_timeout(std::time::Duration::from_millis(100));
     }
 
     if let Some(rt) = oltp_runtime {
+        rt.shutdown_timeout(std::time::Duration::from_millis(100));
+    }
+
+    if let Some(rt) = leaderboard_runtime {
         rt.shutdown_timeout(std::time::Duration::from_millis(100));
     }
 

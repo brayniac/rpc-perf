@@ -5,7 +5,7 @@ pub struct Target {
     /// A list of target endpoints (`IP:PORT`).
     endpoints: Vec<String>,
     /// A cache name
-    cache_name: Option<String>,
+    pub cache_name: Option<String>,
 }
 
 impl Target {

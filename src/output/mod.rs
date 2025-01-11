@@ -1,3 +1,4 @@
+use crate::clients::leaderboard::*;
 use crate::*;
 use chrono::{Timelike, Utc};
 use config::MetricsFormat;
@@ -32,6 +33,7 @@ pub async fn log(config: Config) {
     let pubsub = !config.workload().topics().is_empty();
     let store = !config.workload().stores().is_empty();
     let oltp = config.workload().oltp().is_some();
+    let leaderboard = !config.workload().leaderboards().is_empty();
 
     // get an aligned start time
     let start = tokio::time::Instant::now() - Duration::from_nanos(Utc::now().nanosecond() as u64)
@@ -74,6 +76,10 @@ pub async fn log(config: Config) {
         // output the store stats
         if oltp {
             oltp_stats(&mut snapshot);
+        }
+
+        if leaderboard {
+            leaderboard_stats(&mut snapshot);
         }
 
         window_id += 1;
@@ -399,6 +405,81 @@ fn oltp_stats(snapshot: &mut MetricsSnapshot) {
     );
     output!(
         "OLTP Client Response Rate (/s): Ok: {:.2} Error: {:.2} Timeout: {:.2}",
+        response_ok,
+        response_ex,
+        response_timeout,
+    );
+
+    let mut latencies = "OLTP Client Response Latency (us):".to_owned();
+
+    for (label, _percentile, nanoseconds) in response_latency {
+        let microseconds = nanoseconds / 1000;
+        latencies.push_str(&format!(" {label}: {microseconds}"))
+    }
+
+    output!("{latencies}");
+}
+
+/// Outputs Leaderboard stats
+fn leaderboard_stats(snapshot: &mut MetricsSnapshot) {
+    let connect_ok = snapshot.counter_rate("leaderboard/connect/ok");
+    let connect_ex = snapshot.counter_rate("leaderboard/connect/exception");
+    let connect_timeout = snapshot.counter_rate("leaderboard/connect/timeout");
+    let connect_total = snapshot.counter_rate("leaderboard/connect/total");
+
+    let request_reconnect = snapshot.counter_rate("leaderboard/request/reconnect");
+    let request_ok = snapshot.counter_rate("leaderboard/request/ok");
+    let request_unsupported = snapshot.counter_rate("leaderboard/request/unsupported");
+    let request_total = snapshot.counter_rate("leaderboard/request/total");
+
+    let response_ok = snapshot.counter_rate("leaderboard/response/ok");
+    let response_ex = snapshot.counter_rate("leaderboard/response/exception");
+    let response_timeout = snapshot.counter_rate("leaderboard/response/timeout");
+
+    let connect_sr = 100.0 * connect_ok / connect_total;
+
+    let response_latency = snapshot.percentiles("leaderboard/response/latency");
+
+    output!(
+        "Leaderboard Client Connection: Open: {} Success Rate: {:.2} %",
+        LEADERBOARD_CONNECTIONS_CURR.value(),
+        connect_sr
+    );
+    output!(
+        "Leaderboard Client Connection Rates (/s): Attempt: {:.2} Opened: {:.2} Errors: {:.2} Timeout: {:.2} Closed: {:.2}",
+        connect_total,
+        connect_ok,
+        connect_ex,
+        connect_timeout,
+        request_reconnect,
+    );
+
+    let request_sr = 100.0 * request_ok / request_total;
+    let request_ur = 100.0 * request_unsupported / request_total;
+
+    output!(
+        "Leaderboard Client Request: Success: {:.2} % Unsupported: {:.2} %",
+        request_sr,
+        request_ur,
+    );
+    output!(
+        "Leaderboard Client Request Rate (/s): Ok: {:.2} Unsupported: {:.2}",
+        request_ok,
+        request_unsupported,
+    );
+
+    let response_total = response_ok + response_ex + response_timeout;
+
+    let response_sr = 100.0 * response_ok / response_total;
+    let response_to = 100.0 * response_timeout / response_total;
+
+    output!(
+        "Leaderboard Client Response: Success: {:.2} % Timeout: {:.2} %",
+        response_sr,
+        response_to,
+    );
+    output!(
+        "Leaderboard Client Response Rate (/s): Ok: {:.2} Error: {:.2} Timeout: {:.2}",
         response_ok,
         response_ex,
         response_timeout,

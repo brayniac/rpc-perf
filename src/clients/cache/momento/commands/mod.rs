@@ -1,7 +1,5 @@
 use super::*;
 
-use paste::paste;
-
 mod delete;
 mod get;
 mod hash_delete;
@@ -56,7 +54,7 @@ pub use sorted_set_score::*;
 #[rustfmt::skip]
 macro_rules! record_result {
     ($result:ident, $command:ident) => {
-        paste! {
+        ::paste::paste! {
             match $result {
 		        Ok(Ok(_)) => {
 		            [<$command _OK>].increment();
@@ -75,7 +73,7 @@ macro_rules! record_result {
     };
 
     ($result:ident, $command:ident, $ok:ident) => {
-        paste! {
+        ::paste::paste! {
             match $result {
 		        Ok(Ok(_)) => {
 		            [<$ok>].increment();

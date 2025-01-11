@@ -1,4 +1,6 @@
 use super::*;
+use crate::config::workload::LeaderboardOrder;
+use crate::config::workload::LeaderboardVerb;
 use bytes::Bytes;
 use bytes::BytesMut;
 use config::{Command, RampCompletionAction, RampType, ValueKind, Verb};
@@ -20,15 +22,23 @@ use tokio::runtime::Runtime;
 use zipf::ZipfDistribution;
 
 pub mod client;
+pub mod leaderboard;
 mod oltp;
 mod publisher;
+mod topics;
 
 pub use client::ClientRequest;
-pub use oltp::OltpRequest;
+pub use leaderboard::{LeaderboardRequest, LeaderboardsWorkload};
+pub use oltp::{Oltp, OltpRequest};
 pub use publisher::PublisherWorkItem;
 
 pub mod store;
-pub use store::StoreClientRequest;
+pub use store::{StoreClientRequest, StoreWorkload};
+
+pub use topics::TopicsWorkload;
+
+pub mod cache;
+pub use cache::CacheWorkload;
 
 static SEQUENCE_NUMBER: AtomicU64 = AtomicU64::new(0);
 
@@ -42,6 +52,7 @@ pub fn launch_workload(
     pubsub_sender: Sender<PublisherWorkItem>,
     store_sender: Sender<ClientWorkItemKind<StoreClientRequest>>,
     oltp_sender: Sender<ClientWorkItemKind<OltpRequest>>,
+    leaderboard_sender: Sender<ClientWorkItemKind<LeaderboardRequest>>,
 ) -> Runtime {
     debug!("Launching workload...");
 
@@ -64,6 +75,7 @@ pub fn launch_workload(
         let store_sender = store_sender.clone();
         let oltp_sender = oltp_sender.clone();
         let generator = generator.clone();
+        let leaderboard_sender = leaderboard_sender.clone();
 
         // generate the seed for this workload thread
         let mut seed = [0; 64];
@@ -81,6 +93,7 @@ pub fn launch_workload(
                         &pubsub_sender,
                         &store_sender,
                         &oltp_sender,
+                        &leaderboard_sender,
                         &mut rng,
                     )
                     .await;
@@ -127,23 +140,31 @@ impl Generator {
         let mut component_weights = Vec::new();
 
         for keyspace in config.workload().keyspaces() {
-            components.push(Component::Keyspace(Keyspace::new(config, keyspace)));
+            components.push(Component::Keyspace(CacheWorkload::new(config, keyspace)));
             component_weights.push(keyspace.weight());
         }
 
         for topics in config.workload().topics() {
-            components.push(Component::Topics(Topics::new(config, topics)));
+            components.push(Component::Topics(TopicsWorkload::new(config, topics)));
             component_weights.push(topics.weight());
         }
 
         for store in config.workload().stores() {
-            components.push(Component::Store(Store::new(config, store)));
+            components.push(Component::Store(StoreWorkload::new(config, store)));
             component_weights.push(store.weight());
         }
 
         if let Some(oltp) = config.workload().oltp() {
             components.push(Component::Oltp(Oltp::new(config, oltp)));
             component_weights.push(oltp.weight());
+        }
+
+        for leaderboards in config.workload().leaderboards() {
+            components.push(Component::Leaderboards(LeaderboardsWorkload::new(
+                config,
+                leaderboards,
+            )));
+            component_weights.push(leaderboards.weight);
         }
 
         if components.is_empty() {
@@ -168,6 +189,7 @@ impl Generator {
         pubsub_sender: &Sender<PublisherWorkItem>,
         store_sender: &Sender<ClientWorkItemKind<StoreClientRequest>>,
         oltp_sender: &Sender<ClientWorkItemKind<OltpRequest>>,
+        leaderboard_sender: &Sender<ClientWorkItemKind<LeaderboardRequest>>,
         rng: &mut Xoshiro512PlusPlus,
     ) {
         if let Some(ref ratelimiter) = self.ratelimiter {
@@ -219,10 +241,19 @@ impl Generator {
                     REQUEST_DROPPED.increment();
                 }
             }
+            Component::Leaderboards(leaderboards) => {
+                if leaderboard_sender
+                    .send(self.generate_leaderboard_request(leaderboards, rng))
+                    .await
+                    .is_err()
+                {
+                    REQUEST_DROPPED.increment();
+                }
+            }
         }
     }
 
-    fn generate_pubsub(&self, topics: &Topics, rng: &mut dyn RngCore) -> PublisherWorkItem {
+    fn generate_pubsub(&self, topics: &TopicsWorkload, rng: &mut dyn RngCore) -> PublisherWorkItem {
         let topic_index = topics.topic_dist.sample(rng);
         let topic = topics.topics[topic_index].clone();
 
@@ -256,7 +287,7 @@ impl Generator {
 
     fn generate_store_request(
         &self,
-        store: &Store,
+        store: &StoreWorkload,
         rng: &mut dyn RngCore,
     ) -> ClientWorkItemKind<StoreClientRequest> {
         let command = &store.commands[store.command_dist.sample(rng)];
@@ -295,9 +326,35 @@ impl Generator {
         ClientWorkItemKind::Request { request, sequence }
     }
 
+    fn generate_leaderboard_request(
+        &self,
+        workload: &LeaderboardsWorkload,
+        rng: &mut dyn RngCore,
+    ) -> ClientWorkItemKind<LeaderboardRequest> {
+        let leaderboard = workload.leaderboard_name(rng);
+        let command = workload.command(rng);
+
+        let sequence = SEQUENCE_NUMBER.fetch_add(1, Ordering::Relaxed);
+
+        let request = match command.verb() {
+            LeaderboardVerb::GetRank => LeaderboardRequest::GetRank {
+                leaderboard,
+                ids: workload.get_ids(std::cmp::max(1, command.cardinality().unwrap_or(1)), rng),
+                order: command.order().unwrap_or(LeaderboardOrder::Ascending),
+            },
+            LeaderboardVerb::Upsert => LeaderboardRequest::Upsert {
+                leaderboard,
+                elements: workload
+                    .get_elements(std::cmp::max(1, command.cardinality().unwrap_or(1)), rng),
+            },
+        };
+
+        ClientWorkItemKind::Request { request, sequence }
+    }
+
     fn generate_request(
         &self,
-        keyspace: &Keyspace,
+        keyspace: &CacheWorkload,
         rng: &mut dyn RngCore,
     ) -> ClientWorkItemKind<ClientRequest> {
         let command = &keyspace.commands[keyspace.command_dist.sample(rng)];
@@ -510,128 +567,11 @@ impl Generator {
 
 #[derive(Clone)]
 pub enum Component {
-    Keyspace(Keyspace),
-    Topics(Topics),
-    Store(Store),
+    Keyspace(CacheWorkload),
+    Topics(TopicsWorkload),
+    Store(StoreWorkload),
     Oltp(Oltp),
-}
-
-#[derive(Clone)]
-pub struct Topics {
-    topics: Vec<Arc<String>>,
-    partitions: usize,
-    replications: usize,
-    topic_dist: Distribution,
-    key_len: usize,
-    message_len: usize,
-    message_random_bytes: usize,
-    subscriber_poolsize: usize,
-    subscriber_concurrency: usize,
-    kafka_single_subscriber_group: bool,
-}
-
-impl Topics {
-    pub fn new(config: &Config, topics: &config::Topics) -> Self {
-        let message_random_bytes =
-            estimate_random_bytes_needed(topics.message_len(), topics.compression_ratio());
-        // ntopics, partitions, and replications must be >= 1
-        let ntopics = std::cmp::max(1, topics.topics());
-        let partitions = std::cmp::max(1, topics.partitions());
-        let replications = std::cmp::max(1, topics.replications());
-        let topiclen = topics.topic_len();
-        let message_len = topics.message_len();
-        let key_len = topics.key_len();
-        let subscriber_poolsize = topics.subscriber_poolsize();
-        let subscriber_concurrency = topics.subscriber_concurrency();
-        let topic_dist = match topics.topic_distribution() {
-            config::Distribution::Uniform => Distribution::Uniform(Uniform::new(0, ntopics)),
-            config::Distribution::Zipf => {
-                Distribution::Zipf(ZipfDistribution::new(ntopics, 1.0).unwrap())
-            }
-        };
-        let topic_names: Vec<Arc<String>>;
-        // if the given topic_names has the matched format, we use topic names there
-        if topics
-            .topic_names()
-            .iter()
-            .map(|n| n.len() == topiclen)
-            .fold(topics.topic_names().len() == ntopics, |acc, c| acc && c)
-        {
-            topic_names = topics
-                .topic_names()
-                .iter()
-                .map(|k| Arc::new((*k).clone()))
-                .collect();
-            debug!("Use given topic names:{:?}", topic_names);
-        } else {
-            // initialize topic name PRNG and generate a set of unique topics
-            let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
-            let mut raw_seed = [0_u8; 64];
-            rng.fill_bytes(&mut raw_seed);
-            let topic_name_seed = Seed512(raw_seed);
-            let mut rng = Xoshiro512PlusPlus::from_seed(topic_name_seed);
-            let mut topics = HashSet::with_capacity(ntopics);
-            while topics.len() < ntopics {
-                let topic = (&mut rng)
-                    .sample_iter(&Alphanumeric)
-                    .take(topiclen)
-                    .collect::<Vec<u8>>();
-                let _ = topics.insert(unsafe { std::str::from_utf8_unchecked(&topic) }.to_string());
-            }
-            topic_names = topics.drain().map(|k| k.into()).collect();
-        }
-
-        Self {
-            topics: topic_names,
-            partitions,
-            replications,
-            topic_dist,
-            key_len,
-            message_len,
-            message_random_bytes,
-            subscriber_poolsize,
-            subscriber_concurrency,
-            kafka_single_subscriber_group: topics.kafka_single_subscriber_group(),
-        }
-    }
-
-    pub fn topics(&self) -> &[Arc<String>] {
-        &self.topics
-    }
-
-    pub fn partitions(&self) -> usize {
-        self.partitions
-    }
-
-    pub fn replications(&self) -> usize {
-        self.replications
-    }
-
-    pub fn subscriber_poolsize(&self) -> usize {
-        self.subscriber_poolsize
-    }
-
-    pub fn subscriber_concurrency(&self) -> usize {
-        self.subscriber_concurrency
-    }
-
-    pub fn kafka_single_subscriber_group(&self) -> bool {
-        self.kafka_single_subscriber_group
-    }
-}
-
-#[derive(Clone)]
-pub struct Keyspace {
-    keys: Vec<Arc<[u8]>>,
-    key_dist: Distribution,
-    commands: Vec<Command>,
-    command_dist: WeightedAliasIndex<usize>,
-    inner_keys: Vec<Arc<[u8]>>,
-    inner_key_dist: Distribution,
-    vlen: usize,
-    vkind: ValueKind,
-    ttl: Option<Duration>,
-    vbuf: Bytes,
+    Leaderboards(LeaderboardsWorkload),
 }
 
 #[derive(Clone)]
@@ -645,327 +585,6 @@ impl Distribution {
         match self {
             Self::Uniform(dist) => dist.sample(rng),
             Self::Zipf(dist) => dist.sample(rng),
-        }
-    }
-}
-
-impl Keyspace {
-    pub fn new(config: &Config, keyspace: &config::Keyspace) -> Self {
-        let value_random_bytes = estimate_random_bytes_needed(
-            keyspace.vlen().unwrap_or(0),
-            keyspace.compression_ratio(),
-        );
-
-        // nkeys must be >= 1
-        let nkeys = std::cmp::max(1, keyspace.nkeys());
-        let klen = keyspace.klen();
-
-        // initialize a PRNG with the default initial seed
-        let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
-
-        // generate the seed for key PRNG
-        let mut raw_seed = [0_u8; 64];
-        rng.fill_bytes(&mut raw_seed);
-        let key_seed = Seed512(raw_seed);
-
-        // generate the seed for inner key PRNG
-        let mut raw_seed = [0_u8; 64];
-        rng.fill_bytes(&mut raw_seed);
-        let inner_key_seed = Seed512(raw_seed);
-
-        // we use a predictable seed to generate the keys in the keyspace
-        let mut rng = Xoshiro512PlusPlus::from_seed(key_seed);
-        let mut keys = HashSet::with_capacity(nkeys);
-        while keys.len() < nkeys {
-            let key = (&mut rng)
-                .sample_iter(&Alphanumeric)
-                .take(klen)
-                .collect::<Vec<u8>>();
-            let _ = keys.insert(key);
-        }
-        let keys = keys.drain().map(|k| k.into()).collect();
-        let key_dist = match keyspace.key_distribution() {
-            config::Distribution::Uniform => Distribution::Uniform(Uniform::new(0, nkeys)),
-            config::Distribution::Zipf => {
-                Distribution::Zipf(ZipfDistribution::new(nkeys, 1.0).unwrap())
-            }
-        };
-
-        let nkeys = keyspace.inner_keys_nkeys().unwrap_or(1);
-        let klen = keyspace.inner_keys_klen().unwrap_or(1);
-
-        // we use a predictable seed to generate the keys in the keyspace
-        let mut rng = Xoshiro512PlusPlus::from_seed(inner_key_seed);
-        let mut inner_keys = HashSet::with_capacity(nkeys);
-        while inner_keys.len() < nkeys {
-            let key = (&mut rng)
-                .sample_iter(&Alphanumeric)
-                .take(klen)
-                .collect::<Vec<u8>>();
-            let _ = inner_keys.insert(key);
-        }
-        let inner_keys: Vec<Arc<[u8]>> = inner_keys.drain().map(|k| k.into()).collect();
-        let inner_key_dist = Distribution::Uniform(Uniform::new(0, nkeys));
-
-        let mut commands = Vec::new();
-        let mut command_weights = Vec::new();
-
-        for command in keyspace.commands() {
-            commands.push(*command);
-            command_weights.push(command.weight());
-
-            // validate that the keyspace is adaquately specified for the given
-            // verb
-
-            // commands that set generated values need a `vlen`
-            if keyspace.vlen().is_none()
-                && keyspace.vkind() == ValueKind::Bytes
-                && matches!(command.verb(), Verb::Set | Verb::HashSet)
-            {
-                eprintln!(
-                    "verb: {:?} requires that the keyspace has a `vlen` set when `vkind` is `bytes`",
-                    command.verb()
-                );
-                std::process::exit(2);
-            }
-
-            // cardinality must always be > 0
-            if command.cardinality() == 0 {
-                eprintln!("cardinality must not be zero",);
-                std::process::exit(2);
-            }
-
-            // not all commands support cardinality > 1
-            if command.cardinality() > 1 && !command.verb().supports_cardinality() {
-                eprintln!(
-                    "verb: {:?} requires that `cardinality` is set to `1`",
-                    command.verb()
-                );
-                std::process::exit(2);
-            }
-
-            if command.start().is_some() && !command.verb().supports_start() {
-                eprintln!(
-                    "verb: {:?} does not support the `start` argument",
-                    command.verb()
-                );
-            }
-
-            if command.end().is_some() && !command.verb().supports_end() {
-                eprintln!(
-                    "verb: {:?} does not support the `end` argument",
-                    command.verb()
-                );
-            }
-
-            if command.by_score() && !command.verb().supports_by_score() {
-                eprintln!(
-                    "verb: {:?} does not support the `by_score` option",
-                    command.verb()
-                );
-            }
-
-            if command.truncate().is_some() {
-                // truncate must be >= 1
-                if command.truncate().unwrap() == 0 {
-                    eprintln!("truncate must be >= 1",);
-                    std::process::exit(2);
-                }
-
-                // not all commands support truncate
-                if !command.verb().supports_truncate() {
-                    eprintln!("verb: {:?} does not support truncate", command.verb());
-                    std::process::exit(2);
-                }
-            }
-
-            if command.verb().needs_inner_key()
-                && (keyspace.inner_keys_nkeys().is_none() || keyspace.inner_keys_klen().is_none())
-            {
-                eprintln!(
-                    "verb: {:?} requires that `inner_key_klen` and `inner_key_nkeys` are set",
-                    command.verb()
-                );
-                std::process::exit(2);
-            }
-        }
-
-        // prepare 100MB of random value
-        let len = 100 * 1024 * 1024;
-        let mut vbuf = BytesMut::zeroed(len);
-        rng.fill_bytes(&mut vbuf[0..value_random_bytes]);
-        vbuf.shuffle(&mut rng);
-
-        let command_dist = WeightedAliasIndex::new(command_weights).unwrap();
-
-        Self {
-            keys,
-            key_dist,
-            commands,
-            command_dist,
-            inner_keys,
-            inner_key_dist,
-            vlen: keyspace.vlen().unwrap_or(0),
-            vkind: keyspace.vkind(),
-            ttl: keyspace.ttl(),
-            vbuf: vbuf.into(),
-        }
-    }
-
-    pub fn sample(&self, rng: &mut dyn RngCore) -> Arc<[u8]> {
-        let index = self.key_dist.sample(rng);
-        self.keys[index].clone()
-    }
-
-    pub fn sample_inner(&self, rng: &mut dyn RngCore) -> Arc<[u8]> {
-        let index = self.inner_key_dist.sample(rng);
-        self.inner_keys[index].clone()
-    }
-
-    pub fn gen_value(&self, sequence: usize, rng: &mut dyn RngCore) -> Bytes {
-        match self.vkind {
-            ValueKind::I64 => format!("{}", rng.gen::<i64>()).into_bytes().into(),
-            ValueKind::Bytes => {
-                let start = sequence % (self.vbuf.len() - self.vlen);
-                let end = start + self.vlen;
-
-                self.vbuf.slice(start..end)
-            }
-        }
-    }
-
-    pub fn ttl(&self) -> Option<Duration> {
-        self.ttl
-    }
-}
-
-#[derive(Clone)]
-pub struct Store {
-    keys: Vec<Arc<[u8]>>,
-    key_dist: Distribution,
-    commands: Vec<StoreCommand>,
-    command_dist: WeightedAliasIndex<usize>,
-    vlen: usize,
-    vkind: ValueKind,
-    vbuf: Bytes,
-}
-
-impl Store {
-    pub fn new(config: &Config, store: &config::Store) -> Self {
-        let value_random_bytes =
-            estimate_random_bytes_needed(store.vlen().unwrap_or(0), store.compression_ratio());
-
-        // nkeys must be >= 1
-        let nkeys = std::cmp::max(1, store.nkeys());
-        let klen = store.klen();
-
-        // initialize a PRNG with the default initial seed
-        let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
-
-        // generate the seed for key PRNG
-        let mut raw_seed = [0_u8; 64];
-        rng.fill_bytes(&mut raw_seed);
-        let key_seed = Seed512(raw_seed);
-
-        // generate the seed for inner key PRNG
-        let mut raw_seed = [0_u8; 64];
-        rng.fill_bytes(&mut raw_seed);
-
-        // we use a predictable seed to generate the keys in the store
-        let mut rng = Xoshiro512PlusPlus::from_seed(key_seed);
-        let mut keys = HashSet::with_capacity(nkeys);
-        while keys.len() < nkeys {
-            let key = (&mut rng)
-                .sample_iter(&Alphanumeric)
-                .take(klen)
-                .collect::<Vec<u8>>();
-            let _ = keys.insert(key);
-        }
-        let keys = keys.drain().map(|k| k.into()).collect();
-        let key_dist = match store.key_distribution() {
-            config::Distribution::Uniform => Distribution::Uniform(Uniform::new(0, nkeys)),
-            config::Distribution::Zipf => {
-                Distribution::Zipf(ZipfDistribution::new(nkeys, 1.0).unwrap())
-            }
-        };
-
-        let mut commands = Vec::new();
-        let mut command_weights = Vec::new();
-
-        for command in store.commands() {
-            commands.push(*command);
-            command_weights.push(command.weight());
-
-            // validate that the store is adaquately specified for the given
-            // verb
-
-            // commands that set generated values need a `vlen`
-            if store.vlen().is_none()
-                && store.vkind() == ValueKind::Bytes
-                && matches!(command.verb(), StoreVerb::Put)
-            {
-                eprintln!(
-                    "verb: {:?} requires that the keyspace has a `vlen` set when `vkind` is `bytes`",
-                    command.verb()
-                );
-                std::process::exit(2);
-            }
-        }
-
-        // prepare 100MB of random value
-        let len = 100 * 1024 * 1024;
-        let mut vbuf = BytesMut::zeroed(len);
-        rng.fill_bytes(&mut vbuf[0..value_random_bytes]);
-        vbuf.shuffle(&mut rng);
-
-        let command_dist = WeightedAliasIndex::new(command_weights).unwrap();
-        Self {
-            keys,
-            key_dist,
-            commands,
-            command_dist,
-            vlen: store.vlen().unwrap_or(0),
-            vkind: store.vkind(),
-            vbuf: vbuf.into(),
-        }
-    }
-
-    pub fn sample(&self, rng: &mut dyn RngCore) -> Arc<[u8]> {
-        let index = self.key_dist.sample(rng);
-        self.keys[index].clone()
-    }
-
-    pub fn sample_string(&self, rng: &mut dyn RngCore) -> Arc<String> {
-        let keys = self.sample(rng);
-        Arc::new(String::from_utf8_lossy(&keys).into_owned())
-    }
-
-    pub fn gen_value(&self, sequence: usize, rng: &mut dyn RngCore) -> Bytes {
-        match self.vkind {
-            ValueKind::I64 => format!("{}", rng.gen::<i64>()).into_bytes().into(),
-            ValueKind::Bytes => {
-                let start = sequence % (self.vbuf.len() - self.vlen);
-                let end = start + self.vlen;
-
-                self.vbuf.slice(start..end)
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Oltp {
-    tables: u8,
-    keys: i32,
-}
-
-impl Oltp {
-    pub fn new(_config: &Config, oltp: &config::Oltp) -> Self {
-        {
-            Self {
-                tables: oltp.tables(),
-                keys: oltp.keys(),
-            }
         }
     }
 }

@@ -2103,7 +2103,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -2333,9 +2333,8 @@ dependencies = [
 
 [[package]]
 name = "momento"
-version = "0.46.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbebed46ff164d491704606fc45c607a88a390584cf29892ba186e47ead2d5b2"
+version = "0.47.0"
+source = "git+https://github.com/brayniac/client-sdk-rust?branch=leaderboard-api#45c4b5aa805cce901d5780f48e544a1be2637567"
 dependencies = [
  "base64 0.21.7",
  "derive_more",
@@ -2354,9 +2353,9 @@ dependencies = [
 
 [[package]]
 name = "momento-protos"
-version = "0.119.5"
+version = "0.120.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5288f7f5708b425c04e2ae3a789fb1a60f9c61e1e51ec1e221a1cdede8919dbc"
+checksum = "4213df712c988787f748b35e40f40a7e3cba7a7b327c48f7d8da42354aebb9fa"
 dependencies = [
  "prost 0.12.6",
  "tonic 0.10.2",
@@ -4872,7 +4871,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

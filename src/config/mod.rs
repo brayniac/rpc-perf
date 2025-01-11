@@ -6,6 +6,7 @@ use std::time::Duration;
 mod client;
 mod debug;
 mod general;
+mod leaderboard;
 mod metrics;
 mod oltp;
 mod protocol;
@@ -13,11 +14,13 @@ mod pubsub;
 mod storage;
 mod target;
 mod tls;
-mod workload;
+
+pub mod workload;
 
 pub use client::Client;
 pub use debug::Debug;
 pub use general::General;
+pub use leaderboard::LeaderboardClientConfig;
 pub use metrics::{Format as MetricsFormat, Metrics};
 pub use oltp::Oltp as OltpConfig;
 pub use protocol::Protocol;
@@ -42,9 +45,10 @@ pub struct Config {
     general: General,
     client: Option<Client>,
     debug: Debug,
+    pub leaderboard_client: Option<LeaderboardClientConfig>,
     oltp: Option<OltpConfig>,
     pubsub: Option<Pubsub>,
-    target: Target,
+    pub target: Target,
     tls: Option<Tls>,
     workload: Workload,
     metrics: Option<Metrics>,
@@ -123,5 +127,9 @@ impl Config {
 
     pub fn storage(&self) -> Option<&Storage> {
         self.storage.as_ref()
+    }
+
+    pub fn leaderboard_client(&self) -> Option<&LeaderboardClientConfig> {
+        self.leaderboard_client.as_ref()
     }
 }
