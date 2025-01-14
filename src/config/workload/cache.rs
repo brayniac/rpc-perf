@@ -14,7 +14,7 @@ pub struct Keyspace {
     inner_keys_nkeys: Option<usize>,
     #[serde(default)]
     inner_keys_klen: Option<usize>,
-    commands: Vec<Command>,
+    commands: Vec<CacheCommand>,
     #[serde(default)]
     vlen: Option<usize>,
     #[serde(default)]
@@ -51,7 +51,7 @@ impl Keyspace {
         self.inner_keys_klen
     }
 
-    pub fn commands(&self) -> &[Command] {
+    pub fn commands(&self) -> &[CacheCommand] {
         &self.commands
     }
 
@@ -75,7 +75,7 @@ impl Keyspace {
 }
 
 #[derive(Clone, Copy, Deserialize)]
-pub struct Command {
+pub struct CacheCommand {
     verb: Verb,
     #[serde(default = "one")]
     weight: usize,
@@ -91,7 +91,7 @@ pub struct Command {
     by_score: bool,
 }
 
-impl Command {
+impl CacheCommand {
     pub fn verb(&self) -> Verb {
         self.verb
     }

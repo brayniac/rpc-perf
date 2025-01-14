@@ -92,11 +92,24 @@ ids = 1000
 
 # controls what commands will be used in this keyspace
 commands = [
-	# get the rank for some number of ids within a leaderboard
-	{ verb = "get_rank", cardinality = 8, weight = 1, order = "ascending" },
+	# delete a leaderboard
+	# { verb = "delete", weight = 1 },
+
+	# select the first N elements by rank by specifying a limit and ordering
+	{ verb = "get_by_rank", limit = 10, order = "descending", weight = 1 },
+
+	# select by score without a score filter and using offset and limit for pagination
+	{ verb = "get_by_score", offset = 0, limit = 0, order = "descending", weight = 1 },
+
+	# get the rank for some specific ids within a leaderboard
+	{ verb = "get_rank", ids = 8, order = "descending", weight = 1 },
+
+	# get the number of elements in a leaderboard
+	{ verb = "length", weight = 1 },
+
+	# remove some number of elements from a leaderboard
+	{ verb = "remove", elements = 8, weight = 1 },
 
 	# update/insert the scores for some number of ids within a leaderboard
-	{ verb = "upsert", cardinality = 8, weight = 1 },
-
-
+	{ verb = "upsert", elements = 8, weight = 1 },
 ]

@@ -7,6 +7,7 @@ use crate::clients::ResponseError;
 use crate::config::workload::LeaderboardOrder;
 use crate::workload::*;
 use crate::*;
+use std::ops::Range;
 
 use ::momento::leaderboard::configurations::LowLatency;
 use ::momento::*;
@@ -96,6 +97,39 @@ async fn task(
 
         let result: std::result::Result<(), ResponseError> = match work_item {
             ClientWorkItemKind::Request { request, .. } => match request {
+                LeaderboardRequest::Delete { leaderboard } => {
+                    delete(
+                        &mut client,
+                        request_timeout,
+                        cache_name.clone(),
+                        leaderboard,
+                    )
+                    .await
+                }
+                LeaderboardRequest::Length { leaderboard } => {
+                    length(
+                        &mut client,
+                        request_timeout,
+                        cache_name.clone(),
+                        leaderboard,
+                    )
+                    .await
+                }
+                LeaderboardRequest::GetByRank {
+                    leaderboard,
+                    range,
+                    order,
+                } => {
+                    get_by_rank(
+                        &mut client,
+                        request_timeout,
+                        cache_name.clone(),
+                        leaderboard,
+                        range,
+                        order,
+                    )
+                    .await
+                }
                 LeaderboardRequest::GetRank {
                     leaderboard,
                     ids,
@@ -121,6 +155,36 @@ async fn task(
                         cache_name.clone(),
                         leaderboard,
                         elements,
+                    )
+                    .await
+                }
+                LeaderboardRequest::GetByScore {
+                    leaderboard,
+                    offset,
+                    limit,
+                    order,
+                } => {
+                    get_by_score(
+                        &mut client,
+                        request_timeout,
+                        cache_name.clone(),
+                        leaderboard,
+                        offset,
+                        limit,
+                        order,
+                    )
+                    .await
+                }
+                LeaderboardRequest::Remove {
+                    leaderboard,
+                    ids,
+                } => {
+                    remove(
+                        &mut client,
+                        request_timeout,
+                        cache_name.clone(),
+                        leaderboard,
+                        ids,
                     )
                     .await
                 }
@@ -164,7 +228,124 @@ async fn task(
  * Command Implementations
  */
 
-/// Get the `RankedElement`s for a set of IDs
+pub async fn delete(
+    client: &mut LeaderboardClient,
+    timeout: Duration,
+    cache_name: String,
+    leaderboard: String,
+) -> std::result::Result<(), ResponseError> {
+    LEADERBOARD_DELETE_TOTAL.increment();
+
+    let result =
+        tokio::time::timeout(timeout, client.delete_leaderboard(cache_name, leaderboard)).await;
+
+    match result {
+        Ok(Ok(_)) => {
+            LEADERBOARD_DELETE_OK.increment();
+        }
+        Ok(Err(_)) => {
+            LEADERBOARD_DELETE_EX.increment();
+        }
+        Err(_) => {
+            LEADERBOARD_DELETE_TIMEOUT.increment();
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn length(
+    client: &mut LeaderboardClient,
+    timeout: Duration,
+    cache_name: String,
+    leaderboard: String,
+) -> std::result::Result<(), ResponseError> {
+    LEADERBOARD_LENGTH_TOTAL.increment();
+
+    let result = tokio::time::timeout(
+        timeout,
+        client.get_leaderboard_length(cache_name, leaderboard),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(_)) => {
+            LEADERBOARD_LENGTH_OK.increment();
+        }
+        Ok(Err(_)) => {
+            LEADERBOARD_LENGTH_EX.increment();
+        }
+        Err(_) => {
+            LEADERBOARD_LENGTH_TIMEOUT.increment();
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn get_by_rank(
+    client: &mut LeaderboardClient,
+    timeout: Duration,
+    cache_name: String,
+    leaderboard: String,
+    range: Option<Range<u32>>,
+    order: LeaderboardOrder,
+) -> std::result::Result<(), ResponseError> {
+    LEADERBOARD_GET_BY_RANK_TOTAL.increment();
+
+    let result = tokio::time::timeout(
+        timeout,
+        client.get_by_rank(cache_name, leaderboard, range, order.into()),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(_)) => {
+            LEADERBOARD_GET_BY_RANK_OK.increment();
+        }
+        Ok(Err(_)) => {
+            LEADERBOARD_GET_BY_RANK_EX.increment();
+        }
+        Err(_) => {
+            LEADERBOARD_GET_BY_RANK_TIMEOUT.increment();
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn get_by_score(
+    client: &mut LeaderboardClient,
+    timeout: Duration,
+    cache_name: String,
+    leaderboard: String,
+    offset: u32,
+    limit: u32,
+    order: LeaderboardOrder,
+) -> std::result::Result<(), ResponseError> {
+    LEADERBOARD_GET_RANK_TOTAL.increment();
+
+    let result = tokio::time::timeout(
+        timeout,
+        client.get_by_score(cache_name, leaderboard, None, offset, limit, order.into()),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(_)) => {
+            LEADERBOARD_GET_BY_SCORE_OK.increment();
+        }
+        Ok(Err(_)) => {
+            LEADERBOARD_GET_BY_SCORE_EX.increment();
+        }
+        Err(_) => {
+            LEADERBOARD_GET_BY_SCORE_TIMEOUT.increment();
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn get_rank(
     client: &mut LeaderboardClient,
     timeout: Duration,
@@ -190,6 +371,36 @@ pub async fn get_rank(
         }
         Err(_) => {
             LEADERBOARD_GET_RANK_TIMEOUT.increment();
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn remove(
+    client: &mut LeaderboardClient,
+    timeout: Duration,
+    cache_name: String,
+    leaderboard: String,
+    ids: Vec<u32>,
+) -> std::result::Result<(), ResponseError> {
+    LEADERBOARD_REMOVE_TOTAL.increment();
+
+    let result = tokio::time::timeout(
+        timeout,
+        client.remove_elements::<Vec<u32>>(cache_name, leaderboard, ids),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(_)) => {
+            LEADERBOARD_REMOVE_OK.increment();
+        }
+        Ok(Err(_)) => {
+            LEADERBOARD_REMOVE_EX.increment();
+        }
+        Err(_) => {
+            LEADERBOARD_REMOVE_TIMEOUT.increment();
         }
     }
 

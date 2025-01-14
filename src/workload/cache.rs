@@ -1,10 +1,11 @@
 use super::*;
+use crate::config::workload::CacheCommand;
 
 #[derive(Clone)]
 pub struct CacheWorkload {
     pub keys: Vec<Arc<[u8]>>,
     pub key_dist: Distribution,
-    pub commands: Vec<Command>,
+    pub commands: Vec<CacheCommand>,
     pub command_dist: WeightedAliasIndex<usize>,
     pub inner_keys: Vec<Arc<[u8]>>,
     pub inner_key_dist: Distribution,

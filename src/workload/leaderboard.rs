@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::workload::LeaderboardOrder;
+use std::ops::Range;
 
 use crate::config;
 use crate::config::workload::LeaderboardCommand;
@@ -125,10 +126,31 @@ impl LeaderboardsWorkload {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum LeaderboardRequest {
+    Delete {
+        leaderboard: String,
+    },
+    Length {
+        leaderboard: String,
+    },
     GetRank {
         leaderboard: String,
         ids: Vec<u32>,
         order: LeaderboardOrder,
+    },
+    GetByRank {
+        leaderboard: String,
+        range: Option<Range<u32>>,
+        order: LeaderboardOrder,
+    },
+    GetByScore {
+        leaderboard: String,
+        order: LeaderboardOrder,
+        offset: u32,
+        limit: u32,
+    },
+    Remove {
+        leaderboard: String,
+        ids: Vec<u32>,
     },
     Upsert {
         leaderboard: String,

@@ -1663,7 +1663,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.8",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2334,7 +2334,7 @@ dependencies = [
 [[package]]
 name = "momento"
 version = "0.47.0"
-source = "git+https://github.com/brayniac/client-sdk-rust?branch=leaderboard-api#45c4b5aa805cce901d5780f48e544a1be2637567"
+source = "git+https://github.com/brayniac/client-sdk-rust?branch=leaderboard-api#33838e4d1e28fde1dad02e4142e4c2ceb992cd06"
 dependencies = [
  "base64 0.21.7",
  "derive_more",

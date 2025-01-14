@@ -20,38 +20,92 @@ pub struct LeaderboardsConfig {
 }
 
 #[derive(Clone, Copy, Deserialize)]
-pub struct LeaderboardCommand {
-    verb: LeaderboardVerb,
-    #[serde(default = "one")]
-    weight: usize,
-    #[serde(default)]
-    order: Option<LeaderboardOrder>,
-    cardinality: Option<usize>,
+#[serde(tag = "verb", rename_all = "snake_case")]
+pub enum LeaderboardCommand {
+    #[serde(alias = "delete_leaderboard")]
+    Delete {
+        #[serde(default = "one")]
+        weight: usize,
+    },
+
+    GetRank {
+        #[serde(default = "one")]
+        #[serde(alias = "ids")]
+        cardinality: usize,
+
+        #[serde(default)]
+        order: LeaderboardOrder,
+
+        #[serde(default = "one")]
+        weight: usize,
+    },
+
+    GetByRank {
+        #[serde(default = "one")]
+        #[serde(alias = "limit")]
+        cardinality: usize,
+
+        #[serde(default)]
+        order: LeaderboardOrder,
+
+        #[serde(default = "one")]
+        weight: usize,
+    },
+
+    GetByScore {
+        #[serde(default = "one")]
+        #[serde(alias = "limit")]
+        cardinality: usize,
+
+        #[serde(default)]
+        offset: usize,
+
+        #[serde(default)]
+        order: LeaderboardOrder,
+
+        #[serde(default = "one")]
+        weight: usize,
+    },
+
+    #[serde(alias = "get_leaderboard_length")]
+    Length {
+        #[serde(default = "one")]
+        weight: usize,
+    },
+
+    #[serde(alias = "remove_elements")]
+    Remove {
+        #[serde(default = "one")]
+        #[serde(alias = "elements")]
+        cardinality: usize,
+
+        #[serde(default = "one")]
+        weight: usize,
+    },
+
+    #[serde(alias = "upsert_elements")]
+    Upsert {
+        #[serde(default = "one")]
+        #[serde(alias = "elements")]
+        cardinality: usize,
+
+        #[serde(default = "one")]
+        weight: usize,
+    },
 }
 
-impl LeaderboardCommand {
-    pub fn verb(&self) -> LeaderboardVerb {
-        self.verb
+impl Command for LeaderboardCommand {
+    fn weight(&self) -> usize {
+        match self {
+            Self::Delete { weight, .. } => *weight,
+            Self::GetRank { weight, .. } => *weight,
+            Self::GetByRank { weight, .. } => *weight,
+            Self::GetByScore { weight, .. } => *weight,
+            Self::Length { weight, .. } => *weight,
+            Self::Remove { weight, .. } => *weight,
+            Self::Upsert { weight, .. } => *weight,
+        }
     }
-
-    pub fn weight(&self) -> usize {
-        self.weight
-    }
-
-    pub fn order(&self) -> Option<LeaderboardOrder> {
-        self.order
-    }
-
-    pub fn cardinality(&self) -> Option<usize> {
-        self.cardinality
-    }
-}
-
-#[derive(Clone, Deserialize, Copy, Debug, Ord, Eq, PartialOrd, PartialEq, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum LeaderboardVerb {
-    GetRank,
-    Upsert,
 }
 
 #[derive(Clone, Deserialize, Copy, Debug, Ord, Eq, PartialOrd, PartialEq, Hash)]
@@ -67,5 +121,11 @@ impl From<LeaderboardOrder> for Order {
             LeaderboardOrder::Ascending => Order::Ascending,
             LeaderboardOrder::Descending => Order::Descending,
         }
+    }
+}
+
+impl Default for LeaderboardOrder {
+    fn default() -> Self {
+        Self::Ascending
     }
 }

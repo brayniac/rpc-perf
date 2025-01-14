@@ -16,6 +16,10 @@ fn one() -> usize {
     1
 }
 
+pub trait Command {
+    fn weight(&self) -> usize;
+}
+
 #[derive(Clone, Deserialize)]
 pub struct Workload {
     #[serde(default)]

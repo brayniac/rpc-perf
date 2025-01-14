@@ -1,6 +1,6 @@
 use super::*;
-use crate::config::workload::LeaderboardOrder;
-use crate::config::workload::LeaderboardVerb;
+use crate::config::workload::LeaderboardCommand;
+// use crate::config::workload::LeaderboardVerb;
 use bytes::Bytes;
 use bytes::BytesMut;
 use config::{Command, RampCompletionAction, RampType, ValueKind, Verb};
@@ -336,16 +336,46 @@ impl Generator {
 
         let sequence = SEQUENCE_NUMBER.fetch_add(1, Ordering::Relaxed);
 
-        let request = match command.verb() {
-            LeaderboardVerb::GetRank => LeaderboardRequest::GetRank {
+        let request = match command {
+            LeaderboardCommand::GetRank {
+                cardinality, order, weight: _
+            } => LeaderboardRequest::GetRank {
                 leaderboard,
-                ids: workload.get_ids(std::cmp::max(1, command.cardinality().unwrap_or(1)), rng),
-                order: command.order().unwrap_or(LeaderboardOrder::Ascending),
+                ids: workload.get_ids(std::cmp::max(1, cardinality), rng),
+                order,
             },
-            LeaderboardVerb::Upsert => LeaderboardRequest::Upsert {
+            LeaderboardCommand::GetByRank {
+                cardinality, order, weight: _
+            } => LeaderboardRequest::GetByRank {
                 leaderboard,
-                elements: workload
-                    .get_elements(std::cmp::max(1, command.cardinality().unwrap_or(1)), rng),
+                range: Some(0..(cardinality as u32)),
+                order,
+            },
+            LeaderboardCommand::Upsert { cardinality, weight: _ } => LeaderboardRequest::Upsert {
+                leaderboard,
+                elements: workload.get_elements(std::cmp::max(1, cardinality), rng),
+            },
+            LeaderboardCommand::Delete { weight: _ } => {
+                LeaderboardRequest::Delete { leaderboard }
+            }
+            LeaderboardCommand::GetByScore {
+                cardinality, offset, order, weight: _
+            } => {
+                LeaderboardRequest::GetByScore {
+                    leaderboard,
+                    offset: offset as u32,
+                    limit: cardinality as u32,
+                    order,
+                }
+            }
+            LeaderboardCommand::Length { weight: _ } => {
+                LeaderboardRequest::Length { leaderboard }
+            }
+            LeaderboardCommand::Remove {
+                cardinality, weight: _
+            } => LeaderboardRequest::Remove {
+                leaderboard,
+                ids: workload.get_ids(std::cmp::max(1, cardinality), rng),
             },
         };
 
