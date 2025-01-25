@@ -338,41 +338,46 @@ impl Generator {
 
         let request = match command {
             LeaderboardCommand::GetRank {
-                cardinality, order, weight: _
+                cardinality,
+                order,
+                weight: _,
             } => LeaderboardRequest::GetRank {
                 leaderboard,
                 ids: workload.get_ids(std::cmp::max(1, cardinality), rng),
                 order,
             },
             LeaderboardCommand::GetByRank {
-                cardinality, order, weight: _
+                cardinality,
+                order,
+                weight: _,
             } => LeaderboardRequest::GetByRank {
                 leaderboard,
                 range: Some(0..(cardinality as u32)),
                 order,
             },
-            LeaderboardCommand::Upsert { cardinality, weight: _ } => LeaderboardRequest::Upsert {
+            LeaderboardCommand::Upsert {
+                cardinality,
+                weight: _,
+            } => LeaderboardRequest::Upsert {
                 leaderboard,
                 elements: workload.get_elements(std::cmp::max(1, cardinality), rng),
             },
-            LeaderboardCommand::Delete { weight: _ } => {
-                LeaderboardRequest::Delete { leaderboard }
-            }
+            LeaderboardCommand::Delete { weight: _ } => LeaderboardRequest::Delete { leaderboard },
             LeaderboardCommand::GetByScore {
-                cardinality, offset, order, weight: _
-            } => {
-                LeaderboardRequest::GetByScore {
-                    leaderboard,
-                    offset: offset as u32,
-                    limit: cardinality as u32,
-                    order,
-                }
-            }
-            LeaderboardCommand::Length { weight: _ } => {
-                LeaderboardRequest::Length { leaderboard }
-            }
+                cardinality,
+                offset,
+                order,
+                weight: _,
+            } => LeaderboardRequest::GetByScore {
+                leaderboard,
+                offset: offset as u32,
+                limit: cardinality as u32,
+                order,
+            },
+            LeaderboardCommand::Length { weight: _ } => LeaderboardRequest::Length { leaderboard },
             LeaderboardCommand::Remove {
-                cardinality, weight: _
+                cardinality,
+                weight: _,
             } => LeaderboardRequest::Remove {
                 leaderboard,
                 ids: workload.get_ids(std::cmp::max(1, cardinality), rng),

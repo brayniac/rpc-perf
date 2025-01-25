@@ -105,7 +105,9 @@ pub static LEADERBOARD_CONNECTIONS_CURR: LazyCounter = LazyCounter::new(Counter:
  * Per-Request type metrics
  */
 
-// get rank
+/*
+ * delete
+ */
 
 #[metric(name = "leaderboard/request/delete/total")]
 pub static LEADERBOARD_DELETE_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -119,8 +121,9 @@ pub static LEADERBOARD_DELETE_EX: LazyCounter = LazyCounter::new(Counter::defaul
 #[metric(name = "leaderboard/request/delete/timeout")]
 pub static LEADERBOARD_DELETE_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
 
-
-// get rank
+/*
+ * get rank
+ */
 
 #[metric(name = "leaderboard/request/get_rank/total")]
 pub static LEADERBOARD_GET_RANK_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -133,8 +136,27 @@ pub static LEADERBOARD_GET_RANK_EX: LazyCounter = LazyCounter::new(Counter::defa
 
 #[metric(name = "leaderboard/request/get_rank/timeout")]
 pub static LEADERBOARD_GET_RANK_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
+#[metric(name = "leaderboard/request/get_rank/found")]
+pub static LEADERBOARD_GET_RANK_FOUND: LazyCounter = LazyCounter::new(Counter::default);
 
-// get by rank
+#[metric(name = "leaderboard/request/get_rank/not_found")]
+pub static LEADERBOARD_GET_RANK_NOT_FOUND: LazyCounter = LazyCounter::new(Counter::default);
+
+#[metric(
+    name = "leaderboard/request/get_rank/cardinality",
+    metadata = { unit = "elements" }
+)]
+pub static LEADERBOARD_GET_RANK_CARDINALITY: AtomicHistogram = AtomicHistogram::new(7, 64);
+
+#[metric(
+    name = "leaderboard/request/get_rank/returned",
+    metadata = { unit = "elements" }
+)]
+pub static LEADERBOARD_GET_RANK_RETURNED: AtomicHistogram = AtomicHistogram::new(7, 64);
+
+/*
+ * get by rank
+ */
 
 #[metric(name = "leaderboard/request/get_by_rank/total")]
 pub static LEADERBOARD_GET_BY_RANK_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -148,7 +170,15 @@ pub static LEADERBOARD_GET_BY_RANK_EX: LazyCounter = LazyCounter::new(Counter::d
 #[metric(name = "leaderboard/request/get_by_rank/timeout")]
 pub static LEADERBOARD_GET_BY_RANK_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
 
-// get by score
+#[metric(
+    name = "leaderboard/request/get_by_rank/returned",
+    metadata = { unit = "elements" }
+)]
+pub static LEADERBOARD_GET_BY_RANK_RETURNED: AtomicHistogram = AtomicHistogram::new(7, 64);
+
+/*
+ * get by score
+ */
 
 #[metric(name = "leaderboard/request/get_by_score/total")]
 pub static LEADERBOARD_GET_BY_SCORE_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -162,7 +192,15 @@ pub static LEADERBOARD_GET_BY_SCORE_EX: LazyCounter = LazyCounter::new(Counter::
 #[metric(name = "leaderboard/request/get_by_score/timeout")]
 pub static LEADERBOARD_GET_BY_SCORE_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
 
-// get rank
+#[metric(
+    name = "leaderboard/request/get_by_score/returned",
+    metadata = { unit = "elements" }
+)]
+pub static LEADERBOARD_GET_BY_SCORE_RETURNED: AtomicHistogram = AtomicHistogram::new(7, 64);
+
+/*
+ * length
+ */
 
 #[metric(name = "leaderboard/request/length/total")]
 pub static LEADERBOARD_LENGTH_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -176,7 +214,9 @@ pub static LEADERBOARD_LENGTH_EX: LazyCounter = LazyCounter::new(Counter::defaul
 #[metric(name = "leaderboard/request/length/timeout")]
 pub static LEADERBOARD_LENGTH_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
 
-// remove
+/*
+ * remove
+ */
 
 #[metric(name = "leaderboard/request/remove/total")]
 pub static LEADERBOARD_REMOVE_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -190,7 +230,9 @@ pub static LEADERBOARD_REMOVE_EX: LazyCounter = LazyCounter::new(Counter::defaul
 #[metric(name = "leaderboard/request/remove/timeout")]
 pub static LEADERBOARD_REMOVE_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
 
-// upsert
+/*
+ * upsert
+ */
 
 #[metric(name = "leaderboard/request/upsert/total")]
 pub static LEADERBOARD_UPSERT_TOTAL: LazyCounter = LazyCounter::new(Counter::default);
@@ -203,3 +245,9 @@ pub static LEADERBOARD_UPSERT_EX: LazyCounter = LazyCounter::new(Counter::defaul
 
 #[metric(name = "leaderboard/request/upsert/timeout")]
 pub static LEADERBOARD_UPSERT_TIMEOUT: LazyCounter = LazyCounter::new(Counter::default);
+
+#[metric(
+    name = "leaderboard/request/upsert/cardinality",
+    metadata = { unit = "elements" }
+)]
+pub static LEADERBOARD_UPSERT_CARDINALITY: AtomicHistogram = AtomicHistogram::new(7, 64);

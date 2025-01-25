@@ -175,10 +175,7 @@ async fn task(
                     )
                     .await
                 }
-                LeaderboardRequest::Remove {
-                    leaderboard,
-                    ids,
-                } => {
+                LeaderboardRequest::Remove { leaderboard, ids } => {
                     remove(
                         &mut client,
                         request_timeout,
@@ -300,8 +297,9 @@ pub async fn get_by_rank(
     .await;
 
     match result {
-        Ok(Ok(_)) => {
+        Ok(Ok(response)) => {
             LEADERBOARD_GET_BY_RANK_OK.increment();
+            let _ = LEADERBOARD_GET_BY_RANK_RETURNED.increment(response.elements().len() as _);
         }
         Ok(Err(_)) => {
             LEADERBOARD_GET_BY_RANK_EX.increment();
@@ -323,7 +321,7 @@ pub async fn get_by_score(
     limit: u32,
     order: LeaderboardOrder,
 ) -> std::result::Result<(), ResponseError> {
-    LEADERBOARD_GET_RANK_TOTAL.increment();
+    LEADERBOARD_GET_BY_SCORE_TOTAL.increment();
 
     let result = tokio::time::timeout(
         timeout,
@@ -332,8 +330,9 @@ pub async fn get_by_score(
     .await;
 
     match result {
-        Ok(Ok(_)) => {
+        Ok(Ok(response)) => {
             LEADERBOARD_GET_BY_SCORE_OK.increment();
+            let _ = LEADERBOARD_GET_BY_SCORE_RETURNED.increment(response.elements().len() as _);
         }
         Ok(Err(_)) => {
             LEADERBOARD_GET_BY_SCORE_EX.increment();
@@ -356,6 +355,10 @@ pub async fn get_rank(
 ) -> std::result::Result<(), ResponseError> {
     LEADERBOARD_GET_RANK_TOTAL.increment();
 
+    let cardinality = ids.len() as u64;
+
+    let _ = LEADERBOARD_GET_RANK_CARDINALITY.increment(cardinality);
+
     let result = tokio::time::timeout(
         timeout,
         client.get_rank::<Vec<u32>>(cache_name, leaderboard, ids, order.into()),
@@ -365,6 +368,14 @@ pub async fn get_rank(
     match result {
         Ok(Ok(_)) => {
             LEADERBOARD_GET_RANK_OK.increment();
+
+            let found = response.elements().len() as u64;
+            let not_found = cardinality - found;
+
+            LEADERBOARD_GET_RANK_FOUND.add(found);
+            LEADERBOARD_GET_RANK_NOT_FOUND.add(not_found);
+
+            let _ = LEADERBOARD_GET_RANK_RETURNED.increment(found);
         }
         Ok(Err(_)) => {
             LEADERBOARD_GET_RANK_EX.increment();
@@ -415,6 +426,8 @@ pub async fn upsert(
     elements: Vec<(u32, f64)>,
 ) -> std::result::Result<(), ResponseError> {
     LEADERBOARD_UPSERT_TOTAL.increment();
+
+    let _ = LEADERBOARD_UPSERT_CARDINALITY.increment(elements.len() as _);
 
     let result = tokio::time::timeout(
         timeout,
