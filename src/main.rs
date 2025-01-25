@@ -187,6 +187,7 @@ fn main() {
     // begin cli output
     control_runtime.spawn(output::log(config.clone()));
 
+    debug!("Running workload generator");
     // start the workload generator(s)
     let workload_runtime = launch_workload(
         workload_generator,
@@ -198,6 +199,7 @@ fn main() {
         leaderboard_sender,
     );
 
+    debug!("Starting clients");
     // start client(s)
     let client_runtime = clients::cache::launch(&config, client_receiver);
 
@@ -231,6 +233,7 @@ fn main() {
         }
     }
 
+    debug!("Waiting for test to complete");
     while RUNNING.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_secs(1));
     }
