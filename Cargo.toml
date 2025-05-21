@@ -51,7 +51,7 @@ rand = "0.9.0"
 rand_distr = "0.5.1"
 rand_xoshiro = "0.7.0"
 ratelimit = "0.10.0"
-rdkafka = { version = "0.37.0", features = ["cmake-build", "ssl", "libz", "zstd-pkg-config"] }
+rdkafka = { version = "0.37.0", features = ["cmake-build", "ssl", "libz", "zstd-pkg-config"], optional = true }
 redis = { version = "0.23.3", features = ["tokio-comp"] }
 ringlog = "0.8.0"
 rustls = "0.23.23"
@@ -77,9 +77,10 @@ webpki-roots = "0.26.8"
 tonic-build = "0.12.3"
 
 [features]
-default = ["openssl"]
+default = ["openssl", "kafka"]
 boringssl = ["dep:boring", "boring-sys", "tokio-boring", "pelikan-net/boringssl"]
 openssl = ["dep:openssl", "openssl-sys", "openssl/vendored", "tokio-openssl", "pelikan-net/openssl"]
+kafka = ["rdkafka"]
 
 [profile.release]
 opt-level = 3

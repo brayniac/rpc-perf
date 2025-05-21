@@ -19,8 +19,10 @@ use std::io::{Error, ErrorKind, Result};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 mod blabber;
-mod kafka;
 mod momento;
+
+#[cfg(feature = "kafka")]
+mod kafka;
 
 pub fn hasher() -> RandomState {
     RandomState::with_seeds(
@@ -156,6 +158,7 @@ fn launch_publishers(
         Protocol::Momento => {
             momento::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
         }
+        #[cfg(feature = "kafka")]
         Protocol::Kafka => {
             kafka::create_topics(&mut publisher_rt, config.clone(), workload_components);
             kafka::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
@@ -194,6 +197,7 @@ fn launch_subscribers(config: &Config, workload_components: &[Component]) -> Opt
         Protocol::Momento => {
             momento::launch_subscribers(&mut subscriber_rt, config.clone(), workload_components);
         }
+        #[cfg(feature = "kafka")]
         Protocol::Kafka => {
             kafka::launch_subscribers(&mut subscriber_rt, config.clone(), workload_components);
         }
