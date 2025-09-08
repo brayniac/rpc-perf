@@ -19,7 +19,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 mod blabber;
-mod kafka;
+// mod kafka;
 mod momento;
 
 pub fn hasher() -> RandomState {
@@ -156,10 +156,10 @@ fn launch_publishers(
         Protocol::Momento => {
             momento::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
         }
-        Protocol::Kafka => {
-            kafka::create_topics(&mut publisher_rt, config.clone(), workload_components);
-            kafka::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
-        }
+        // Protocol::Kafka => {
+        //     kafka::create_topics(&mut publisher_rt, config.clone(), workload_components);
+        //     kafka::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
+        // }
         protocol => {
             error!(
                 "pubsub is not supported for the selected protocol: {:?}",
@@ -194,9 +194,9 @@ fn launch_subscribers(config: &Config, workload_components: &[Component]) -> Opt
         Protocol::Momento => {
             momento::launch_subscribers(&mut subscriber_rt, config.clone(), workload_components);
         }
-        Protocol::Kafka => {
-            kafka::launch_subscribers(&mut subscriber_rt, config.clone(), workload_components);
-        }
+        // Protocol::Kafka => {
+        //     kafka::launch_subscribers(&mut subscriber_rt, config.clone(), workload_components);
+        // }
         _ => {
             eprintln!("pubsub is not supported for the selected protocol");
             std::process::exit(1);

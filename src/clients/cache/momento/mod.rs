@@ -1,3 +1,4 @@
+use tokio::runtime::Handle;
 use super::*;
 use crate::clients::*;
 
@@ -12,13 +13,26 @@ pub mod http;
 
 /// Launch tasks with one channel per task as gRPC is mux-enabled.
 pub fn launch_tasks(
-    runtime: &mut Runtime,
+    runtime: &Handle,
     config: Config,
     work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
 ) {
     debug!("launching momento protocol tasks");
 
-    for _ in 0..config.client().unwrap().poolsize() {
+    let mut needed = config.client().unwrap().poolsize();
+    let batch = (needed / 16).min(1);
+
+    while needed > 0 {
+        let runtime = runtime.clone();
+        let config = config.clone();
+        let work_receiver = work_receiver.clone();
+        std::thread::spawn(move || { launch_n_tasks(batch, runtime, config, work_receiver)});
+        needed -= batch;
+    }
+}
+
+fn launch_n_tasks(count: usize, runtime: Handle, config: Config, work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>) {
+    for _ in 0..count {
         let client = {
             let _guard = runtime.enter();
 
