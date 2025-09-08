@@ -18,43 +18,77 @@ pub fn launch_tasks(
 ) {
     debug!("launching momento protocol tasks");
 
-    for _ in 0..config.client().unwrap().poolsize() {
-        let client = {
-            let _guard = runtime.enter();
+    // Check for API key once before spawning tasks
+    if std::env::var("MOMENTO_API_KEY").is_err() {
+        eprintln!("environment variable `MOMENTO_API_KEY` is not set");
+        std::process::exit(1);
+    }
 
-            // initialize the Momento cache client
-            if std::env::var("MOMENTO_API_KEY").is_err() {
-                eprintln!("environment variable `MOMENTO_API_KEY` is not set");
-                std::process::exit(1);
-            }
+    let poolsize = config.client().unwrap().poolsize();
+    let concurrency = config.client().unwrap().concurrency();
 
-            let credential_provider =
-                match CredentialProvider::from_env_var("MOMENTO_API_KEY".to_string()) {
-                    Ok(v) => v,
+    // Create a dedicated runtime for connection establishment
+    // This prevents blocking the main runtime and allows better parallelization
+    let connection_runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(poolsize.min(16)) // Cap at 16 threads to avoid excessive resource usage
+        .enable_all()
+        .build()
+        .expect("failed to create connection runtime");
+
+    // Create all clients in parallel using the dedicated runtime
+    let clients = connection_runtime.block_on(async {
+        let mut handles = Vec::with_capacity(poolsize);
+
+        // Spawn all client creation tasks in parallel
+        for _ in 0..poolsize {
+            let handle = tokio::spawn(async move {
+                // Initialize the Momento cache client asynchronously
+                let credential_provider =
+                    match CredentialProvider::from_env_var("MOMENTO_API_KEY".to_string()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("MOMENTO_API_KEY key should be valid: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+
+                let client = match CacheClient::builder()
+                    .default_ttl(Duration::from_secs(900))
+                    .configuration(LowLatency::v1())
+                    .credential_provider(credential_provider)
+                    .build()
+                {
+                    Ok(c) => c,
                     Err(e) => {
-                        eprintln!("MOMENTO_API_KEY key should be valid: {e}");
+                        eprintln!("could not create cache client: {}", e);
                         std::process::exit(1);
                     }
                 };
-            match CacheClient::builder()
-                .default_ttl(Duration::from_secs(900))
-                .configuration(LowLatency::v1())
-                .credential_provider(credential_provider)
-                .build()
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("could not create cache client: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        };
 
-        CONNECT.increment();
-        CONNECT_CURR.increment();
+                CONNECT.increment();
+                CONNECT_CURR.increment();
 
-        // create one task per channel
-        for _ in 0..config.client().unwrap().concurrency() {
+                client
+            });
+
+            handles.push(handle);
+        }
+
+        // Wait for all clients to complete
+        let mut clients = Vec::with_capacity(poolsize);
+        for handle in handles {
+            clients.push(handle.await.unwrap());
+        }
+        clients
+    });
+
+    // Shutdown the connection runtime as it's no longer needed
+    connection_runtime.shutdown_background();
+
+    // Spawn worker tasks on the main runtime
+    for client in clients {
+        // Create one task per channel for this client
+        for _ in 0..concurrency {
             runtime.spawn(task(config.clone(), client.clone(), work_receiver.clone()));
         }
     }
