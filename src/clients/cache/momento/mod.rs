@@ -20,7 +20,7 @@ pub fn launch_tasks(
     debug!("launching momento protocol tasks");
 
     let mut needed = config.client().unwrap().poolsize();
-    let batch = (needed / 16).min(1);
+    let batch = (needed / 16).max(1);
 
     while needed > 0 {
         let runtime = runtime.clone();
