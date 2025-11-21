@@ -1,8 +1,8 @@
 use crate::{
     replay::replay_engine::launch_replay_workload,
-    workload::{launch_workload, Generator, Ratelimit},
+    workload::{Generator, Ratelimit},
 };
-use async_channel::{bounded, Sender};
+use async_channel::bounded;
 use backtrace::Backtrace;
 use clap::{Arg, Command};
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -32,9 +32,6 @@ static WAIT: AtomicUsize = AtomicUsize::new(0);
 
 static METRICS_SNAPSHOT: Lazy<Arc<RwLock<MetricsSnapshot>>> =
     Lazy::new(|| Arc::new(RwLock::new(Default::default())));
-
-// queue depth per client thread
-static QUEUE_DEPTH: usize = 64;
 
 fn main() {
     // custom panic hook to terminate whole process after unwinding
@@ -152,14 +149,22 @@ fn main() {
         }
 
         info!("Starting replay mode");
-        let (replay_sender, replay_receiver) = bounded(
-            config
-                .client()
-                .map(|c| c.threads() * QUEUE_DEPTH * 16)
-                .unwrap_or(1),
-        );
 
-        // spawn the admin thread
+        // Queue depth per client thread for replay mode
+        const REPLAY_QUEUE_DEPTH: usize = 64 * 16;
+
+        // Calculate total client threads for queue sizing
+        let client_threads = config.client().map(|c| c.poolsize() * c.concurrency()).unwrap_or(1)
+            * config.target().endpoints().len();
+        let queue_depth = client_threads * REPLAY_QUEUE_DEPTH;
+
+        // Create channel for replay work items
+        let (replay_sender, replay_receiver) = bounded(queue_depth);
+
+        // Create a Generator for replay mode that receives from the channel
+        let replay_generator = Generator::new_for_replay(&config, replay_receiver);
+
+        // spawn the admin thread (no ratelimiter in replay mode)
         control_runtime.spawn(admin::http(config.clone(), None));
 
         // launch metrics file output
@@ -169,7 +174,7 @@ fn main() {
         control_runtime.spawn(output::log(config.clone(), true));
 
         debug!("Launching replay clients");
-        let replay_runtime = clients::cache::launch(&config, replay_receiver);
+        let replay_runtime = clients::cache::launch(&config, replay_generator);
 
         debug!("Launching replay workload");
         let replay_workload_runtime = launch_replay_workload(config.clone(), replay_sender);
@@ -195,37 +200,6 @@ fn main() {
 
     // otherwise continue onwards with the normal workload generator
 
-    let (client_sender, client_receiver) = bounded(
-        config
-            .client()
-            .map(|c| c.threads() * QUEUE_DEPTH)
-            .unwrap_or(1),
-    );
-    let (pubsub_sender, pubsub_receiver) = bounded(
-        config
-            .pubsub()
-            .map(|c| c.publisher_threads() * QUEUE_DEPTH)
-            .unwrap_or(1),
-    );
-    let (store_sender, store_receiver) = bounded(
-        config
-            .storage()
-            .map(|c| c.threads() * QUEUE_DEPTH)
-            .unwrap_or(1),
-    );
-    let (leaderboard_sender, leaderboard_receiver) = bounded(
-        config
-            .leaderboard()
-            .map(|c| c.threads() * QUEUE_DEPTH)
-            .unwrap_or(1),
-    );
-    let (oltp_sender, oltp_receiver) = bounded(
-        config
-            .oltp()
-            .map(|c| c.threads() * QUEUE_DEPTH)
-            .unwrap_or(1),
-    );
-
     info!("Initializing workload generator");
     let workload_generator = Generator::new(&config);
 
@@ -242,34 +216,22 @@ fn main() {
     // begin cli output
     control_runtime.spawn(output::log(config.clone(), false));
 
-    debug!("Running workload generator");
-    // start the workload generator(s)
-    let workload_runtime = launch_workload(
-        workload_generator,
-        &config,
-        client_sender,
-        pubsub_sender,
-        store_sender,
-        leaderboard_sender,
-        oltp_sender,
-    );
-
     debug!("Starting clients");
-    // start client(s)
-    let client_runtime = clients::cache::launch(&config, client_receiver);
+    // start client(s) - work generation now happens inside client tasks
+    let client_runtime = clients::cache::launch(&config, workload_generator.clone());
 
     // start store client(s)
-    let store_runtime = clients::store::launch(&config, store_receiver);
+    let store_runtime = clients::store::launch(&config, workload_generator.clone());
 
     // start leaderboard client(s)
-    let leaderboard_runtime = clients::leaderboard::launch(&config, leaderboard_receiver);
+    let leaderboard_runtime = clients::leaderboard::launch(&config, workload_generator.clone());
 
     // start OLTP clients
-    let oltp_runtime = clients::oltp::launch(&config, oltp_receiver);
+    let oltp_runtime = clients::oltp::launch(&config, workload_generator.clone());
 
     // start publisher(s) and subscriber(s)
     let mut pubsub_runtimes =
-        clients::pubsub::launch(&config, pubsub_receiver, &workload_components);
+        clients::pubsub::launch(&config, workload_generator, &workload_components);
 
     // start ratelimit controller thread if a dynamic ratelimit is configured
     {
@@ -312,8 +274,6 @@ fn main() {
     }
 
     pubsub_runtimes.shutdown_timeout(std::time::Duration::from_millis(100));
-
-    workload_runtime.shutdown_timeout(std::time::Duration::from_millis(100));
 
     // delay before exiting
 

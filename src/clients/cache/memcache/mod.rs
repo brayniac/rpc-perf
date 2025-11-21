@@ -1,6 +1,7 @@
 use super::*;
 use crate::clients::ResponseError;
 use crate::net::Connector;
+use crate::workload::Generator;
 use protocol_memcache::{Parse, Protocol, Request, Response, TextProtocol, Ttl};
 use session::{Buf, BufMut, Buffer};
 use std::borrow::{Borrow, BorrowMut};
@@ -12,21 +13,27 @@ struct RequestWithValidator {
     validator: Box<dyn Fn(Response) -> std::result::Result<(), ()> + Send>,
 }
 
-/// Launch tasks with one conncetion per task as memcache protocol is not mux-enabled.
+/// Launch tasks with one connection per task as memcache protocol is not mux-enabled.
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching memcache protocol tasks");
 
     // create one task per connection
     for _ in 0..config.client().unwrap().poolsize() {
         for endpoint in config.target().endpoints() {
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
             runtime.spawn(task(
-                work_receiver.clone(),
                 endpoint.clone(),
                 config.clone(),
+                generator.clone(),
+                Seed512(seed),
             ));
         }
     }
@@ -34,9 +41,10 @@ pub fn launch_tasks(
 
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
     endpoint: String,
     config: Config,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
     let connector = Connector::new(&config)?;
 
@@ -50,6 +58,7 @@ async fn task(
     let parser = protocol_memcache::ResponseParser {};
     let mut read_buffer = Buffer::new(client_config.read_buffer_size());
     let mut write_buffer = Buffer::new(client_config.write_buffer_size());
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     while RUNNING.load(Ordering::Relaxed) {
         if stream.is_none() {
@@ -80,18 +89,19 @@ async fn task(
 
         let mut s = stream.take().unwrap();
 
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                // No keyspace component configured, skip
+                stream = Some(s);
+                continue;
+            }
+        };
 
         REQUEST.increment();
-
-        // check if we should reconnect
-        if work_item == ClientWorkItemKind::Reconnect {
-            CONNECT_CURR.decrement();
-            continue;
-        }
 
         let request = RequestWithValidator::try_from(&work_item);
 
@@ -187,8 +197,13 @@ async fn task(
                     for hist in latency_histograms {
                         let _ = hist.increment(latency_ns);
                     }
-                    // preserve the connection for the next request
-                    stream = Some(s);
+                    // Check if we should reconnect
+                    if generator.should_reconnect() {
+                        CONNECT_CURR.decrement();
+                    } else {
+                        // preserve the connection for the next request
+                        stream = Some(s);
+                    }
                 }
             }
             Err(ResponseError::Exception) => {

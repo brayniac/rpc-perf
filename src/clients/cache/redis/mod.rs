@@ -1,6 +1,7 @@
 use crate::clients::cache::*;
 use crate::clients::common::Queue;
 use crate::clients::*;
+use crate::workload::Generator;
 
 use ::redis::aio::MultiplexedConnection;
 use ::redis::AsyncCommands;
@@ -12,11 +13,12 @@ mod commands;
 
 use commands::*;
 
-/// Launch tasks with one conncetion per task as RESP protocol is not mux-enabled.
+/// Launch tasks with one connection per task as RESP protocol is not mux-enabled.
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching resp protocol tasks");
 
@@ -37,11 +39,16 @@ pub fn launch_tasks(
             // one task for each concurrent session on the connection
 
             for _ in 0..config.client().unwrap().concurrency() {
+                // Generate unique seed for this task
+                let mut seed = [0u8; 64];
+                rng.fill_bytes(&mut seed);
+
                 runtime.spawn(task(
-                    work_receiver.clone(),
                     endpoint.clone(),
                     config.clone(),
                     queue.clone(),
+                    generator.clone(),
+                    Seed512(seed),
                 ));
             }
         }
@@ -59,31 +66,37 @@ pub async fn pool_manager(endpoint: String, _config: Config, queue: Queue<Multip
 
     while RUNNING.load(Ordering::Relaxed) {
         if client.is_none() {
-            CONNECT.increment();
-
-            if let Ok(c) = ::redis::Client::open(endpoint.clone()) {
-                CONNECT_OK.increment();
-                CONNECT_CURR.increment();
-
-                client = Some(c);
-            } else {
-                CONNECT_EX.increment();
-
-                tokio::time::sleep(Duration::from_millis(1)).await;
+            match ::redis::Client::open(endpoint.clone()) {
+                Ok(c) => {
+                    client = Some(c);
+                }
+                Err(e) => {
+                    error!("failed to create redis client: {e}");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
             }
-
-            continue;
         }
 
-        if let Ok(connection) = client
+        CONNECT.increment();
+
+        match client
             .as_ref()
             .unwrap()
             .get_multiplexed_async_connection()
             .await
         {
-            let _ = queue.send(connection).await;
-        } else {
-            client = None;
+            Ok(connection) => {
+                CONNECT_OK.increment();
+                CONNECT_CURR.increment();
+                let _ = queue.send(connection).await;
+            }
+            Err(e) => {
+                CONNECT_EX.increment();
+                error!("failed to get redis connection: {e}");
+                client = None;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
         }
     }
 }
@@ -91,14 +104,16 @@ pub async fn pool_manager(endpoint: String, _config: Config, queue: Queue<Multip
 #[allow(dead_code)]
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
     endpoint: String,
     config: Config,
     queue: Queue<MultiplexedConnection>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
     trace!("launching resp task for endpoint: {endpoint}");
 
     let mut connection = None;
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     while RUNNING.load(Ordering::Relaxed) {
         if connection.is_none() {
@@ -113,10 +128,18 @@ async fn task(
 
         let mut con = connection.take().unwrap();
 
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        // This ensures ratelimiter wait time is included in latency measurement
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                // No keyspace component configured, skip
+                connection = Some(con);
+                continue;
+            }
+        };
 
         REQUEST.increment();
         let start = Instant::now();
@@ -195,6 +218,7 @@ async fn task(
                 }
             },
             ClientWorkItemKind::Reconnect => {
+                CONNECT_CURR.decrement();
                 continue;
             }
         };
@@ -207,10 +231,16 @@ async fn task(
 
         match result {
             Ok(_) => {
-                connection = Some(con);
                 RESPONSE_OK.increment();
                 for hist in latency_histograms {
                     let _ = hist.increment(latency_ns);
+                }
+
+                // Check if we should reconnect
+                if generator.should_reconnect() {
+                    CONNECT_CURR.decrement();
+                } else {
+                    connection = Some(con);
                 }
             }
             Err(ResponseError::Exception) => {

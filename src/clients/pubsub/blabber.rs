@@ -1,7 +1,9 @@
 use crate::clients::pubsub::*;
 use crate::net::Connector;
+use crate::workload::Generator;
 
 use bytes::{Buf, BufMut};
+use rand_xoshiro::Xoshiro512PlusPlus;
 use session::Buffer;
 use tokio::io::AsyncReadExt;
 use tokio::time::timeout;
@@ -145,7 +147,8 @@ async fn subscriber_task(endpoint: String, config: Config) -> Result<()> {
 pub fn launch_publishers(
     _runtime: &mut Runtime,
     _config: Config,
-    _work_receiver: Receiver<WorkItem>,
+    _generator: Generator,
+    _rng: &mut Xoshiro512PlusPlus,
 ) {
     // note: there are no publish tasks for blabber, instead the server is
     // expected to publish compatible messages to the subscribers

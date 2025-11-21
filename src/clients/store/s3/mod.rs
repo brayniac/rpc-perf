@@ -1,15 +1,16 @@
-use crate::workload::{ClientWorkItemKind, StoreClientRequest};
+use crate::workload::{ClientWorkItemKind, Generator, StoreClientRequest};
 use crate::*;
 use http::Uri;
 use std::fmt::Display;
 
-use async_channel::Receiver;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use http::{HeaderMap, Method, Version};
 use http_body_util::{BodyExt, Full};
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use tokio::runtime::Runtime;
 
 use std::time::Instant;
@@ -24,16 +25,22 @@ const MB: usize = 1024 * 1024;
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<StoreClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching s3 protocol tasks");
 
     for _ in 0..config.storage().unwrap().poolsize() {
         for endpoint in config.target().endpoints() {
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
             runtime.spawn(task(
-                work_receiver.clone(),
                 endpoint.clone(),
                 config.clone(),
+                generator.clone(),
+                Seed512(seed),
             ));
         }
     }
@@ -41,9 +48,10 @@ pub fn launch_tasks(
 
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<StoreClientRequest>>,
     endpoint: String,
     _config: Config,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<(), std::io::Error> {
     let access_key = std::env::var("AWS_ACCESS_KEY").unwrap_or_else(|_| {
         eprintln!("environment variable `AWS_ACCESS_KEY` is not set");
@@ -54,6 +62,8 @@ async fn task(
         eprintln!("environment variable `AWS_SECRET_KEY` is not set");
         std::process::exit(1);
     });
+
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     let uri = endpoint.parse::<http::Uri>().unwrap_or_else(|e| {
         eprintln!("target endpoint could not be parsed as a uri: {endpoint}\n{e}");
@@ -122,9 +132,13 @@ async fn task(
 
         let c = client.take().unwrap();
 
-        let work_item = match work_receiver.recv().await {
-            Ok(w) => w,
-            Err(_) => {
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_store_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                client = Some(c);
                 continue;
             }
         };
@@ -359,7 +373,12 @@ async fn task(
             }
         };
 
-        client = Some(c);
+        // Check if we should reconnect
+        if generator.should_reconnect() {
+            CONNECT_CURR.decrement();
+        } else {
+            client = Some(c);
+        }
     }
 
     Ok(())

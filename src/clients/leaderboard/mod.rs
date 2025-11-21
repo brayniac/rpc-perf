@@ -4,18 +4,16 @@
 ///
 /// RPC-Perf store clients are used to evaluate the performance of object
 /// leaderboard services in terms of throughput and latency.
+use crate::workload::Generator;
 use crate::*;
 
-use async_channel::Receiver;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro512PlusPlus;
 use tokio::runtime::Runtime;
-use workload::{ClientWorkItemKind, LeaderboardClientRequest};
 
 mod momento;
 
-pub fn launch(
-    config: &Config,
-    work_receiver: Receiver<ClientWorkItemKind<LeaderboardClientRequest>>,
-) -> Option<Runtime> {
+pub fn launch(config: &Config, generator: Generator) -> Option<Runtime> {
     if config.leaderboard().is_none() {
         debug!("No leaderboard configuration specified");
         return None;
@@ -31,8 +29,13 @@ pub fn launch(
         .build()
         .expect("failed to initialize tokio runtime");
 
+    // Initialize a master RNG to generate unique seeds for each task
+    let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
+
     match config.general().protocol() {
-        Protocol::Momento => momento::launch_tasks(&mut client_rt, config.clone(), work_receiver),
+        Protocol::Momento => {
+            momento::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng)
+        }
         protocol => {
             eprintln!(
                 "leaderboard commands are not supported for the {:?} protocol",

@@ -8,14 +8,15 @@
 /// throughput and latency from both the publisher's perspective as well as the
 /// end-to-end latency and total message throughput.
 use crate::workload::Component;
-use crate::workload::PublisherWorkItem as WorkItem;
+use crate::workload::Generator;
 use crate::*;
 
 use ahash::RandomState;
-use async_channel::Receiver;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro512PlusPlus;
 use tokio::runtime::Runtime;
 
-use std::io::{Error, ErrorKind, Result};
+use std::io::Result;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod blabber;
@@ -120,18 +121,18 @@ impl PubsubRuntimes {
 
 pub fn launch(
     config: &Config,
-    work_receiver: Receiver<WorkItem>,
+    generator: Generator,
     workload_components: &[Component],
 ) -> PubsubRuntimes {
     PubsubRuntimes {
-        publisher_rt: launch_publishers(config, work_receiver, workload_components),
+        publisher_rt: launch_publishers(config, generator, workload_components),
         subscriber_rt: launch_subscribers(config, workload_components),
     }
 }
 
 fn launch_publishers(
     config: &Config,
-    work_receiver: Receiver<WorkItem>,
+    generator: Generator,
     _workload_components: &[Component],
 ) -> Option<Runtime> {
     if config.pubsub().is_none() {
@@ -148,12 +149,15 @@ fn launch_publishers(
         .build()
         .expect("failed to initialize tokio runtime");
 
+    // Initialize a master RNG to generate unique seeds for each task
+    let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
+
     match config.general().protocol() {
         Protocol::Blabber => {
-            blabber::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
+            blabber::launch_publishers(&mut publisher_rt, config.clone(), generator, &mut rng);
         }
         Protocol::Momento => {
-            momento::launch_publishers(&mut publisher_rt, config.clone(), work_receiver);
+            momento::launch_publishers(&mut publisher_rt, config.clone(), generator, &mut rng);
         }
         protocol => {
             error!(

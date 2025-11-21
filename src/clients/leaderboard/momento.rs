@@ -2,18 +2,19 @@ use super::record_result;
 use crate::clients::ResponseError;
 use crate::config::Config;
 use crate::metrics::*;
-use crate::workload::{ClientWorkItemKind, LeaderboardClientRequest};
+use crate::workload::{ClientWorkItemKind, Generator, LeaderboardClientRequest};
 use crate::{workload, RUNNING};
 use paste::paste;
 
-use async_channel::Receiver;
 use momento::leaderboard::{configurations, LeaderboardClient};
 use momento::CredentialProvider;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use ringlog::debug;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;
 
-use std::io::{Error, Result};
+use std::io::Result;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
@@ -21,7 +22,8 @@ use std::time::Instant;
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<LeaderboardClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching momento protocol tasks");
 
@@ -71,11 +73,16 @@ pub fn launch_tasks(
 
         // create one task per channel
         for _ in 0..config.leaderboard().unwrap().concurrency() {
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
             runtime.spawn(task(
                 config.clone(),
                 client.clone(),
                 cache_name.clone(),
-                work_receiver.clone(),
+                generator.clone(),
+                Seed512(seed),
             ));
         }
     }
@@ -85,13 +92,19 @@ async fn task(
     config: Config,
     mut client: LeaderboardClient,
     cache_name: String,
-    work_receiver: Receiver<ClientWorkItemKind<LeaderboardClientRequest>>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
+
     while RUNNING.load(Ordering::Relaxed) {
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::other("channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_leaderboard_client_request(&mut rng) {
+            Some(item) => item,
+            None => continue,
+        };
 
         LEADERBOARD_REQUEST.increment();
         let start = Instant::now();

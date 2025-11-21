@@ -1,8 +1,9 @@
 use crate::workload::ClientRequest;
 use crate::workload::ClientWorkItemKind;
+use crate::workload::Generator;
 use crate::*;
-use async_channel::Receiver;
-use std::io::Error;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use std::time::Instant;
 use tokio::runtime::Runtime;
 use tonic::transport::Channel;
@@ -19,7 +20,8 @@ pub mod pingpong {
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching ping grpc protocol tasks");
 
@@ -39,7 +41,16 @@ pub fn launch_tasks(
 
                     // create one task per channel
                     for _ in 0..config.client().unwrap().concurrency() {
-                        runtime.spawn(task(config.clone(), client.clone(), work_receiver.clone()));
+                        // Generate unique seed for this task
+                        let mut seed = [0u8; 64];
+                        rng.fill_bytes(&mut seed);
+
+                        runtime.spawn(task(
+                            config.clone(),
+                            client.clone(),
+                            generator.clone(),
+                            Seed512(seed),
+                        ));
                     }
                 } else {
                     CONNECT_EX.increment();
@@ -52,13 +63,19 @@ pub fn launch_tasks(
 async fn task(
     _config: Config,
     mut client: PingClient<Channel>,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<(), std::io::Error> {
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
+
     while RUNNING.load(Ordering::Relaxed) {
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::other("channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => continue,
+        };
 
         REQUEST.increment();
         let start = Instant::now();

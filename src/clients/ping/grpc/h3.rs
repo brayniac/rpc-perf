@@ -1,8 +1,8 @@
 use crate::clients::common::Queue;
 use crate::workload::ClientRequest;
 use crate::workload::ClientWorkItemKind;
+use crate::workload::Generator;
 use crate::*;
-use async_channel::Receiver;
 use bytes::Bytes;
 use chrono::Utc;
 use h3::client::SendRequest;
@@ -10,6 +10,8 @@ use http::uri::Authority;
 use http::HeaderValue;
 use http::Method;
 use http::Version;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use rustls::pki_types::CertificateDer;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -23,7 +25,8 @@ static ALPN: &[u8] = b"h3";
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching ping http3 protocol tasks");
 
@@ -42,11 +45,16 @@ pub fn launch_tasks(
             // since HTTP/3.0 allows muxing several sessions onto a single H3
             // stream, we launch one task for each session on this H3 stream
             for _ in 0..config.client().unwrap().concurrency() {
+                // Generate unique seed for this task
+                let mut seed = [0u8; 64];
+                rng.fill_bytes(&mut seed);
+
                 runtime.spawn(task(
-                    work_receiver.clone(),
                     endpoint.clone(),
                     config.clone(),
                     queue.clone(),
+                    generator.clone(),
+                    Seed512(seed),
                 ));
             }
         }
@@ -178,10 +186,11 @@ pub async fn pool_manager(
 // a task for HTTP/3.0
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
     endpoint: String,
     _config: Config,
     queue: Queue<SendRequest<h3_quinn::OpenStreams, Bytes>>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<(), std::io::Error> {
     let uri = endpoint
         .parse::<http::Uri>()
@@ -193,6 +202,7 @@ async fn task(
         .clone();
 
     let _port = auth.port_u16().unwrap_or(443);
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     while RUNNING.load(Ordering::Relaxed) {
         let sender = queue.recv().await;
@@ -203,10 +213,13 @@ async fn task(
 
         let mut sender = sender.unwrap();
 
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => continue,
+        };
 
         REQUEST.increment();
 
@@ -220,7 +233,6 @@ async fn task(
                 }
             },
             ClientWorkItemKind::Reconnect => {
-                REQUEST_UNSUPPORTED.increment();
                 continue;
             }
         };

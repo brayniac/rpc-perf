@@ -2,23 +2,24 @@ use crate::clients::*;
 use crate::net::Connector;
 use crate::workload::*;
 use crate::*;
-use async_channel::Receiver;
 use protocol_ping::{Compose, Parse, Request, Response};
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use session::{Buf, BufMut, Buffer};
 use std::borrow::{Borrow, BorrowMut};
-use std::io::ErrorKind;
-use std::io::{Error, Result};
+use std::io::{ErrorKind, Result};
 use std::time::Instant;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;
 
-/// Launch tasks with one conncetion per task as ping protocol is not mux-enabled.
+/// Launch tasks with one connection per task as ping protocol is not mux-enabled.
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching ping ascii protocol tasks");
 
@@ -26,10 +27,15 @@ pub fn launch_tasks(
     // note: these may be channels instead of connections for multiplexed protocols
     for _ in 0..config.client().unwrap().poolsize() {
         for endpoint in config.target().endpoints() {
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
             runtime.spawn(task(
-                work_receiver.clone(),
                 endpoint.clone(),
                 config.clone(),
+                generator.clone(),
+                Seed512(seed),
             ));
         }
     }
@@ -38,9 +44,10 @@ pub fn launch_tasks(
 // a task for ping servers (eg: Pelikan Pingserver)
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
     endpoint: String,
     config: Config,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
     let connector = Connector::new(&config)?;
 
@@ -52,6 +59,7 @@ async fn task(
     let parser = protocol_ping::ResponseParser::new();
     let mut read_buffer = Buffer::new(client_config.read_buffer_size());
     let mut write_buffer = Buffer::new(client_config.write_buffer_size());
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     while RUNNING.load(Ordering::Relaxed) {
         if stream.is_none() {
@@ -82,10 +90,16 @@ async fn task(
 
         let mut s = stream.take().unwrap();
 
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::other("channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                stream = Some(s);
+                continue;
+            }
+        };
 
         REQUEST.increment();
 
@@ -182,14 +196,19 @@ async fn task(
                     }
                 }
 
-                // preserve the connection for reuse
-                stream = Some(s);
-
                 RESPONSE_OK.increment();
 
                 let latency = stop.duration_since(start).as_nanos() as u64;
 
                 let _ = RESPONSE_LATENCY.increment(latency);
+
+                // Check if we should reconnect
+                if generator.should_reconnect() {
+                    CONNECT_CURR.decrement();
+                } else {
+                    // preserve the connection for reuse
+                    stream = Some(s);
+                }
             }
             Err(ResponseError::Exception) => {
                 // record execption

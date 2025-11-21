@@ -1,6 +1,7 @@
 use crate::workload::*;
 use crate::*;
-use async_channel::Receiver;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use sqlx::Connection;
 use sqlx::Error;
 use sqlx::MySql;
@@ -14,28 +15,36 @@ use tokio::runtime::Runtime;
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<OltpRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     info!("launching mysql protocol tasks");
 
     for _ in 0..config.oltp().unwrap().poolsize() {
         for endpoint in config.target().endpoints() {
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
             runtime.spawn(task(
-                work_receiver.clone(),
                 endpoint.clone(),
                 config.clone(),
+                generator.clone(),
+                Seed512(seed),
             ));
         }
     }
 }
 
-// a task for ping servers (eg: Pelikan Pingserver)
+// a task for MySQL OLTP servers
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<OltpRequest>>,
     endpoint: String,
     _config: Config,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
     let mut connection = None;
 
     while RUNNING.load(Ordering::Relaxed) {
@@ -58,10 +67,13 @@ async fn task(
 
         let mut c = connection.take().unwrap();
 
-        let work_item = match work_receiver.recv().await {
-            Ok(w) => w,
-            Err(e) => {
-                error!("error while attempting to receive work item: {e}");
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_oltp_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                connection = Some(c);
                 continue;
             }
         };
@@ -110,7 +122,12 @@ async fn task(
             }
         }
 
-        connection = Some(c);
+        // Check if we should reconnect
+        if generator.should_reconnect() {
+            OLTP_CONNECT_CURR.decrement();
+        } else {
+            connection = Some(c);
+        }
     }
 
     Ok(())

@@ -148,10 +148,6 @@ impl Leaderboard {
 #[derive(Clone, Deserialize)]
 pub struct Topics {
     topics: usize,
-    #[serde(default = "one")]
-    partitions: usize,
-    #[serde(default = "one")]
-    replications: usize,
     topic_len: usize,
     #[serde(default)]
     topic_names: Vec<String>,
@@ -173,14 +169,6 @@ pub struct Topics {
 impl Topics {
     pub fn weight(&self) -> usize {
         self.weight
-    }
-
-    pub fn partitions(&self) -> usize {
-        self.partitions
-    }
-
-    pub fn replications(&self) -> usize {
-        self.replications
     }
 
     pub fn topics(&self) -> usize {

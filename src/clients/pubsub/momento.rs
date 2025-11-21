@@ -2,7 +2,8 @@ use crate::clients::pubsub::*;
 use crate::clients::*;
 use crate::workload::*;
 use ::momento::topics::Subscription;
-use async_channel::Receiver;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use tokio::runtime::Runtime;
 
 use ::momento::topics::configurations::LowLatency;
@@ -143,7 +144,12 @@ async fn subscriber_task(client: Arc<TopicClient>, cache_name: String, topic: St
 }
 
 /// Launch tasks with one channel per task as gRPC is mux-enabled.
-pub fn launch_publishers(runtime: &mut Runtime, config: Config, work_receiver: Receiver<WorkItem>) {
+pub fn launch_publishers(
+    runtime: &mut Runtime,
+    config: Config,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
+) {
     debug!("launching momento protocol tasks");
 
     for _ in 0..config.pubsub().unwrap().publisher_poolsize() {
@@ -182,10 +188,15 @@ pub fn launch_publishers(runtime: &mut Runtime, config: Config, work_receiver: R
 
         // create one task per channel
         for _ in 0..config.pubsub().unwrap().publisher_concurrency() {
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
             runtime.spawn(publisher_task(
                 config.clone(),
                 client.clone(),
-                work_receiver.clone(),
+                generator.clone(),
+                Seed512(seed),
             ));
         }
     }
@@ -193,10 +204,12 @@ pub fn launch_publishers(runtime: &mut Runtime, config: Config, work_receiver: R
 
 async fn publisher_task(
     config: Config,
-    // cache_name: String,
     client: Arc<TopicClient>,
-    work_receiver: Receiver<WorkItem>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
+
     PUBSUB_PUBLISHER_CURR.add(1);
 
     let cache_name = config
@@ -211,15 +224,18 @@ async fn publisher_task(
     let validator = MessageValidator::new();
 
     while RUNNING.load(Ordering::Relaxed) {
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_pubsub_request(&mut rng) {
+            Some(item) => item,
+            None => continue,
+        };
 
         REQUEST.increment();
         let start = Instant::now();
         let result = match work_item {
-            WorkItem::Publish {
+            PublisherWorkItem::Publish {
                 topic,
                 mut message,
                 key: _,

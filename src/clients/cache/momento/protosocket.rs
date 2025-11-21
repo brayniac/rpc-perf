@@ -1,13 +1,14 @@
 use crate::clients::cache::momento::protosocket_commands;
+use crate::clients::cache::{Seed512, Xoshiro512PlusPlus};
 use crate::clients::ResponseError;
-use crate::workload::{ClientRequest, ClientWorkItemKind};
+use crate::workload::{ClientRequest, ClientWorkItemKind, Generator};
 use crate::*;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use momento::protosocket::cache::Configuration;
 use momento::{CredentialProvider, ProtosocketCacheClient};
+use rand::{RngCore, SeedableRng};
 
-use async_channel::Receiver;
 use tokio::runtime::Runtime;
 
 use std::time::Instant;
@@ -16,7 +17,8 @@ use std::time::Instant;
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching momento-protosocket protocol tasks");
 
@@ -49,17 +51,23 @@ pub fn launch_tasks(
         }
     };
 
+    // Generate unique seed for this task
+    let mut seed = [0u8; 64];
+    rng.fill_bytes(&mut seed);
+
     runtime.spawn(launch_protosocket_task(
         config.clone(),
         credential_provider.clone(),
-        work_receiver.clone(),
+        generator,
+        Seed512(seed),
     ));
 }
 
 async fn launch_protosocket_task(
     config: Config,
     credential_provider: CredentialProvider,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    seed: Seed512,
 ) {
     let poolsize = config.client().unwrap().poolsize();
     let concurrency = config.client().unwrap().concurrency();
@@ -91,16 +99,22 @@ async fn launch_protosocket_task(
     // Also make sure to preserve the same number of protosocket tasks as
     // would have been created when we made more than one client.
     let mut join_handles = vec![];
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
     for _ in 0..poolsize {
         CONNECT.increment();
         CONNECT_CURR.increment();
 
         let client = client.clone();
         let config = config.clone();
-        let work_receiver = work_receiver.clone();
+        let generator = generator.clone();
+
+        // Generate unique seed for this task
+        let mut task_seed = [0u8; 64];
+        rng.fill_bytes(&mut task_seed);
 
         join_handles.push(tokio::spawn(async move {
-            let result = protosocket_task(config, client, work_receiver, concurrency).await;
+            let result =
+                protosocket_task(config, client, generator, Seed512(task_seed), concurrency).await;
             eprintln!("protosocket driver task exited: {result:?}");
         }));
     }
@@ -110,7 +124,8 @@ async fn launch_protosocket_task(
 async fn protosocket_task(
     config: Config,
     client: ProtosocketCacheClient,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    seed: Seed512,
     concurrency_limit: usize,
 ) -> super::Result<()> {
     eprintln!("started protosocket task");
@@ -119,6 +134,7 @@ async fn protosocket_task(
         std::process::exit(1);
     });
     let mut in_flight = FuturesUnordered::new();
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     while RUNNING.load(Ordering::Relaxed) {
         let in_flight_count = in_flight.len();
@@ -140,21 +156,18 @@ async fn protosocket_task(
                     }
                 }
             }
-            work_item = async {
+            _ = async {
                 if in_flight_count < concurrency_limit {
-                    work_receiver.recv().await
+                    // Wait for ratelimiter
+                    generator.wait();
+                    futures::future::ready(()).await
                 } else {
                     futures::future::pending().await
                 }
             } => {
-                match work_item {
-                    Ok(work_item) => {
-                        in_flight.push(run_work_item(work_item, &config, &client, cache_name));
-                    }
-                    Err(e) => {
-                        eprintln!("work channel closed: {e:?}");
-                        break;
-                    }
+                // Generate work item locally
+                if let Some(work_item) = generator.generate_client_request(&mut rng) {
+                    in_flight.push(run_work_item(work_item, &config, &client, cache_name));
                 }
             }
         }

@@ -1,15 +1,12 @@
-use crate::workload::ClientWorkItemKind;
-use crate::workload::OltpRequest;
+use crate::workload::Generator;
 use crate::*;
-use async_channel::Receiver;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro512PlusPlus;
 use tokio::runtime::Runtime;
 
 mod mysql;
 
-pub fn launch(
-    config: &Config,
-    work_receiver: Receiver<ClientWorkItemKind<OltpRequest>>,
-) -> Option<Runtime> {
+pub fn launch(config: &Config, generator: Generator) -> Option<Runtime> {
     if config.oltp().is_none() {
         debug!("No oltp configuration specified");
         return None;
@@ -24,8 +21,11 @@ pub fn launch(
         .build()
         .expect("failed to initialize tokio runtime");
 
+    // Initialize a master RNG to generate unique seeds for each task
+    let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
+
     match config.general().protocol() {
-        Protocol::Mysql => mysql::launch_tasks(&mut client_rt, config.clone(), work_receiver),
+        Protocol::Mysql => mysql::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng),
         protocol => {
             eprintln!("oltp is not supported for the {:?} protocol", protocol);
             std::process::exit(1);

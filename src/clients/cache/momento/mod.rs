@@ -1,5 +1,6 @@
 use super::*;
 use crate::clients::*;
+use crate::workload::Generator;
 
 use ::momento::cache::configurations::LowLatency;
 use ::momento::*;
@@ -16,7 +17,8 @@ mod protosocket_commands;
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching momento protocol tasks");
 
@@ -57,7 +59,16 @@ pub fn launch_tasks(
 
         // create one task per channel
         for _ in 0..config.client().unwrap().concurrency() {
-            runtime.spawn(task(config.clone(), client.clone(), work_receiver.clone()));
+            // Generate unique seed for this task
+            let mut seed = [0u8; 64];
+            rng.fill_bytes(&mut seed);
+
+            runtime.spawn(task(
+                config.clone(),
+                client.clone(),
+                generator.clone(),
+                Seed512(seed),
+            ));
         }
     }
 }
@@ -65,18 +76,27 @@ pub fn launch_tasks(
 async fn task(
     config: Config,
     mut client: CacheClient,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<()> {
     let cache_name = config.target().cache_name().unwrap_or_else(|| {
         eprintln!("cache name is not specified in the `target` section");
         std::process::exit(1);
     });
 
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
+
     while RUNNING.load(Ordering::Relaxed) {
-        let work_item = work_receiver
-            .recv()
-            .await
-            .map_err(|_| Error::new(ErrorKind::Other, "channel closed"))?;
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                // No keyspace component configured, skip
+                continue;
+            }
+        };
 
         REQUEST.increment();
         let start = Instant::now();

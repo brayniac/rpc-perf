@@ -1,9 +1,10 @@
+use crate::clients::cache::{Seed512, Xoshiro512PlusPlus};
 use crate::clients::common::*;
-use crate::workload::{ClientRequest, ClientWorkItemKind};
+use crate::workload::{ClientRequest, ClientWorkItemKind, Generator};
 use crate::*;
+use rand::{RngCore, SeedableRng};
 use rustls::KeyLogFile;
 
-use async_channel::Receiver;
 use bytes::{Bytes, BytesMut};
 use h2::client::SendRequest;
 use http::{Method, Version};
@@ -22,7 +23,8 @@ const MB: u32 = 1024 * 1024;
 pub fn launch_tasks(
     runtime: &mut Runtime,
     config: Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    generator: Generator,
+    rng: &mut Xoshiro512PlusPlus,
 ) {
     debug!("launching momento http protocol tasks");
 
@@ -41,11 +43,16 @@ pub fn launch_tasks(
             // since HTTP/2.0 allows muxing several sessions onto a single TCP
             // stream, we launch one task for each session on this TCP stream
             for _ in 0..config.client().unwrap().concurrency() {
+                // Generate unique seed for this task
+                let mut seed = [0u8; 64];
+                rng.fill_bytes(&mut seed);
+
                 runtime.spawn(task(
-                    work_receiver.clone(),
                     endpoint.clone(),
                     config.clone(),
                     queue.clone(),
+                    generator.clone(),
+                    Seed512(seed),
                 ));
             }
         }
@@ -121,10 +128,11 @@ pub async fn pool_manager(endpoint: String, _config: Config, queue: Queue<SendRe
 // a task for http/2.0
 #[allow(clippy::slow_vector_initialization)]
 async fn task(
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
     endpoint: String,
     config: Config,
     queue: Queue<SendRequest<Bytes>>,
+    generator: Generator,
+    seed: Seed512,
 ) -> Result<(), std::io::Error> {
     let token = std::env::var("MOMENTO_API_KEY").unwrap_or_else(|_| {
         eprintln!("environment variable `MOMENTO_API_KEY` is not set");
@@ -151,6 +159,7 @@ async fn task(
         .to_owned();
 
     let mut buffer = BytesMut::new();
+    let mut rng = Xoshiro512PlusPlus::from_seed(seed);
 
     while RUNNING.load(Ordering::Relaxed) {
         let sender = queue.recv().await;
@@ -161,13 +170,14 @@ async fn task(
 
         let mut sender = sender.unwrap();
 
-        let work_item = match work_receiver.recv().await {
-            Ok(w) => w,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "channel closed",
-                ));
+        // Wait for ratelimiter and generate request locally
+        generator.wait();
+
+        let work_item = match generator.generate_client_request(&mut rng) {
+            Some(item) => item,
+            None => {
+                // No keyspace component configured, skip
+                continue;
             }
         };
 

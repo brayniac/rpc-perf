@@ -1,4 +1,5 @@
 use super::*;
+use async_channel::Receiver;
 use bytes::Bytes;
 use bytes::BytesMut;
 use config::{Command, RampCompletionAction, RampType, ValueKind, Verb};
@@ -14,10 +15,9 @@ use ratelimit::Ratelimiter;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::io::{Result, Write};
+use std::io::Write;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 pub mod client;
 mod oltp;
@@ -38,75 +38,14 @@ static SEQUENCE_NUMBER: AtomicU64 = AtomicU64::new(0);
 // a multiplier for the ratelimiter token bucket capacity
 pub(crate) static BUCKET_CAPACITY: u64 = 64;
 
-pub fn launch_workload(
-    generator: Generator,
-    config: &Config,
-    client_sender: Sender<ClientWorkItemKind<ClientRequest>>,
-    pubsub_sender: Sender<PublisherWorkItem>,
-    store_sender: Sender<ClientWorkItemKind<StoreClientRequest>>,
-    leaderboard_sender: Sender<ClientWorkItemKind<LeaderboardClientRequest>>,
-    oltp_sender: Sender<ClientWorkItemKind<OltpRequest>>,
-) -> Runtime {
-    debug!("Launching workload...");
-
-    // spawn the request drivers on their own runtime
-    let workload_rt = Builder::new_multi_thread()
-        .enable_all()
-        .thread_name("rpc-perf-gen")
-        .worker_threads(config.workload().threads())
-        .build()
-        .expect("failed to initialize tokio runtime");
-
-    // initialize a PRNG with the default initial seed. We will then use this to
-    // generate unique seeds for each workload thread.
-    let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
-
-    // spawn the request generators on a blocking threads
-    for _ in 0..config.workload().threads() {
-        let client_sender = client_sender.clone();
-        let pubsub_sender = pubsub_sender.clone();
-        let store_sender = store_sender.clone();
-        let leaderboard_sender = leaderboard_sender.clone();
-        let oltp_sender = oltp_sender.clone();
-        let generator = generator.clone();
-
-        // generate the seed for this workload thread
-        let mut seed = [0; 64];
-        rng.fill_bytes(&mut seed);
-
-        workload_rt.spawn(async move {
-            // since this seed is unique, each workload thread should produce
-            // requests in a different sequence
-            let mut rng = Xoshiro512PlusPlus::from_seed(Seed512(seed));
-
-            while RUNNING.load(Ordering::Relaxed) {
-                generator
-                    .generate(
-                        &client_sender,
-                        &pubsub_sender,
-                        &store_sender,
-                        &leaderboard_sender,
-                        &oltp_sender,
-                        &mut rng,
-                    )
-                    .await;
-            }
-        });
-    }
-
-    let c = config.clone();
-    let store_c = config.clone();
-    workload_rt.spawn_blocking(move || reconnect(client_sender, c));
-    workload_rt.spawn_blocking(move || reconnect(store_sender, store_c));
-
-    workload_rt
-}
-
 #[derive(Clone)]
 pub struct Generator {
     ratelimiter: Option<Arc<Ratelimiter>>,
+    reconnect_ratelimiter: Option<Arc<Ratelimiter>>,
     components: Vec<Component>,
     component_dist: WeightedAliasIndex<usize>,
+    /// For replay mode: receives work items from the replay engine
+    replay_receiver: Option<Receiver<ClientWorkItemKind<ClientRequest>>>,
 }
 
 impl Generator {
@@ -128,6 +67,23 @@ impl Generator {
                     .expect("failed to initialize ratelimiter"),
             )
         });
+
+        let reconnect_ratelimiter = config
+            .client()
+            .and_then(|client| client.reconnect_rate())
+            .map(|rate| {
+                let rate = rate.get();
+                let amount = (rate as f64 / 1_000_000.0).ceil() as u64;
+
+                let interval = Duration::from_nanos(1_000_000_000 / (rate / amount));
+
+                Arc::new(
+                    Ratelimiter::builder(amount, interval)
+                        .max_tokens(amount * BUCKET_CAPACITY)
+                        .build()
+                        .expect("failed to initialize reconnect ratelimiter"),
+                )
+            });
 
         let mut components = Vec::new();
         let mut component_weights = Vec::new();
@@ -167,8 +123,41 @@ impl Generator {
 
         Self {
             ratelimiter,
+            reconnect_ratelimiter,
             components,
             component_dist: WeightedAliasIndex::new(component_weights).unwrap(),
+            replay_receiver: None,
+        }
+    }
+
+    /// Create a Generator for replay mode that receives work items from a channel
+    pub fn new_for_replay(
+        config: &Config,
+        receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
+    ) -> Self {
+        let reconnect_ratelimiter = config
+            .client()
+            .and_then(|client| client.reconnect_rate())
+            .map(|rate| {
+                let rate = rate.get();
+                let amount = (rate as f64 / 1_000_000.0).ceil() as u64;
+
+                let interval = Duration::from_nanos(1_000_000_000 / (rate / amount));
+
+                Arc::new(
+                    Ratelimiter::builder(amount, interval)
+                        .max_tokens(amount * BUCKET_CAPACITY)
+                        .build()
+                        .expect("failed to initialize reconnect ratelimiter"),
+                )
+            });
+
+        Self {
+            ratelimiter: None, // Replay mode uses its own timing
+            reconnect_ratelimiter,
+            components: Vec::new(),
+            component_dist: WeightedAliasIndex::new(vec![1]).unwrap(), // Dummy
+            replay_receiver: Some(receiver),
         }
     }
 
@@ -176,15 +165,14 @@ impl Generator {
         self.ratelimiter.clone()
     }
 
-    pub async fn generate(
-        &self,
-        client_sender: &Sender<ClientWorkItemKind<ClientRequest>>,
-        pubsub_sender: &Sender<PublisherWorkItem>,
-        store_sender: &Sender<ClientWorkItemKind<StoreClientRequest>>,
-        leaderboard_sender: &Sender<ClientWorkItemKind<LeaderboardClientRequest>>,
-        oltp_sender: &Sender<ClientWorkItemKind<OltpRequest>>,
-        rng: &mut Xoshiro512PlusPlus,
-    ) {
+    /// Wait for the ratelimiter to allow a request. Returns immediately if no ratelimiter is configured.
+    /// In replay mode, this is a no-op since timing is handled by the replay engine.
+    pub fn wait(&self) {
+        // In replay mode, timing is handled by the replay engine
+        if self.replay_receiver.is_some() {
+            return;
+        }
+
         if let Some(ref ratelimiter) = self.ratelimiter {
             loop {
                 RATELIMIT_DROPPED.set(ratelimiter.dropped());
@@ -196,53 +184,94 @@ impl Generator {
                 std::thread::sleep(std::time::Duration::from_micros(100));
             }
         }
+    }
 
+    /// Check if a reconnect should occur. Returns true if reconnect is configured and the ratelimiter allows it.
+    pub fn should_reconnect(&self) -> bool {
+        if let Some(ref ratelimiter) = self.reconnect_ratelimiter {
+            ratelimiter.try_wait().is_ok()
+        } else {
+            false
+        }
+    }
+
+    /// Sample a component and generate a client request if applicable.
+    /// Returns None if the sampled component is not a Keyspace.
+    /// In replay mode, receives from the replay channel instead of generating.
+    pub fn generate_client_request(
+        &self,
+        rng: &mut Xoshiro512PlusPlus,
+    ) -> Option<ClientWorkItemKind<ClientRequest>> {
+        // In replay mode, receive from channel
+        if let Some(ref receiver) = self.replay_receiver {
+            loop {
+                match receiver.try_recv() {
+                    Ok(item) => return Some(item),
+                    Err(async_channel::TryRecvError::Empty) => {
+                        std::thread::sleep(std::time::Duration::from_micros(100));
+                        if !RUNNING.load(Ordering::Relaxed) {
+                            return None;
+                        }
+                    }
+                    Err(async_channel::TryRecvError::Closed) => return None,
+                }
+            }
+        }
+
+        // Normal generation mode
         match &self.components[self.component_dist.sample(rng)] {
-            Component::Keyspace(keyspace) => {
-                if client_sender
-                    .send(self.generate_request(keyspace, rng))
-                    .await
-                    .is_err()
-                {
-                    REQUEST_DROPPED.increment();
-                }
-            }
-            Component::Topics(topics) => {
-                if pubsub_sender
-                    .send(self.generate_pubsub(topics, rng))
-                    .await
-                    .is_err()
-                {
-                    REQUEST_DROPPED.increment();
-                }
-            }
-            Component::Store(store) => {
-                if store_sender
-                    .send(self.generate_store_request(store, rng))
-                    .await
-                    .is_err()
-                {
-                    REQUEST_DROPPED.increment();
-                }
-            }
+            Component::Keyspace(keyspace) => Some(self.generate_request(keyspace, rng)),
+            _ => None,
+        }
+    }
+
+    /// Sample a component and generate a store request if applicable.
+    /// Returns None if the sampled component is not a Store.
+    pub fn generate_store_client_request(
+        &self,
+        rng: &mut Xoshiro512PlusPlus,
+    ) -> Option<ClientWorkItemKind<StoreClientRequest>> {
+        match &self.components[self.component_dist.sample(rng)] {
+            Component::Store(store) => Some(self.generate_store_request(store, rng)),
+            _ => None,
+        }
+    }
+
+    /// Sample a component and generate a pubsub work item if applicable.
+    /// Returns None if the sampled component is not Topics.
+    pub fn generate_pubsub_request(
+        &self,
+        rng: &mut Xoshiro512PlusPlus,
+    ) -> Option<PublisherWorkItem> {
+        match &self.components[self.component_dist.sample(rng)] {
+            Component::Topics(topics) => Some(self.generate_pubsub(topics, rng)),
+            _ => None,
+        }
+    }
+
+    /// Sample a component and generate a leaderboard request if applicable.
+    /// Returns None if the sampled component is not a Leaderboard.
+    pub fn generate_leaderboard_client_request(
+        &self,
+        rng: &mut Xoshiro512PlusPlus,
+    ) -> Option<ClientWorkItemKind<LeaderboardClientRequest>> {
+        match &self.components[self.component_dist.sample(rng)] {
             Component::Leaderboard(leaderboard) => {
-                if leaderboard_sender
-                    .send(self.generate_leaderboard_request(leaderboard, rng))
-                    .await
-                    .is_err()
-                {
-                    REQUEST_DROPPED.increment();
-                }
+                Some(self.generate_leaderboard_request(leaderboard, rng))
             }
-            Component::Oltp(oltp) => {
-                if oltp_sender
-                    .send(self.generate_oltp_request(oltp, rng))
-                    .await
-                    .is_err()
-                {
-                    REQUEST_DROPPED.increment();
-                }
-            }
+            _ => None,
+        }
+    }
+
+    /// Sample a component and generate an OLTP request if applicable.
+    /// Returns None if the sampled component is not OLTP.
+    pub fn generate_oltp_client_request(
+        &self,
+        rng: &mut Xoshiro512PlusPlus,
+    ) -> Option<ClientWorkItemKind<OltpRequest>> {
+        match &self.components[self.component_dist.sample(rng)] {
+            Component::Oltp(oltp) => Some(self.generate_oltp_request(oltp, rng)),
+            _ => None,
         }
     }
 
@@ -568,8 +597,6 @@ pub enum Component {
 #[derive(Clone)]
 pub struct Topics {
     topics: Vec<Arc<String>>,
-    partitions: usize,
-    replications: usize,
     topic_dist: Distribution,
     key_len: usize,
     message_len: usize,
@@ -583,10 +610,8 @@ impl Topics {
     pub fn new(config: &Config, topics: &config::Topics) -> Self {
         let message_random_bytes =
             estimate_random_bytes_needed(topics.message_len(), topics.compression_ratio());
-        // ntopics, partitions, and replications must be >= 1
+        // ntopics must be >= 1
         let ntopics = std::cmp::max(1, topics.topics());
-        let partitions = std::cmp::max(1, topics.partitions());
-        let replications = std::cmp::max(1, topics.replications());
         let topiclen = topics.topic_len();
         let message_len = topics.message_len();
         let key_len = topics.key_len();
@@ -634,8 +659,6 @@ impl Topics {
 
         Self {
             topics: topic_names,
-            partitions,
-            replications,
             topic_dist,
             key_len,
             message_len,
@@ -648,14 +671,6 @@ impl Topics {
 
     pub fn topics(&self) -> &[Arc<String>] {
         &self.topics
-    }
-
-    pub fn partitions(&self) -> usize {
-        self.partitions
-    }
-
-    pub fn replications(&self) -> usize {
-        self.replications
     }
 
     pub fn subscriber_poolsize(&self) -> usize {
@@ -1162,52 +1177,6 @@ impl Oltp {
 pub enum ClientWorkItemKind<T> {
     Reconnect,
     Request { request: T, sequence: u64 },
-}
-
-pub async fn reconnect<TRequestKind>(
-    work_sender: Sender<ClientWorkItemKind<TRequestKind>>,
-    config: Config,
-) -> Result<()> {
-    if config.client().is_none() {
-        return Ok(());
-    }
-
-    let ratelimiter = config.client().unwrap().reconnect_rate().map(|rate| {
-        let rate = rate.get();
-        let amount = (rate as f64 / 1_000_000.0).ceil() as u64;
-        RATELIMIT_CURR.set(rate as i64);
-
-        // even though we might not have nanosecond level clock resolution,
-        // by using a nanosecond level duration, we achieve more accurate
-        // ratelimits.
-        let interval = Duration::from_nanos(1_000_000_000 / (rate / amount));
-
-        Arc::new(
-            Ratelimiter::builder(amount, interval)
-                .max_tokens(amount * BUCKET_CAPACITY)
-                .build()
-                .expect("failed to initialize ratelimiter"),
-        )
-    });
-
-    if ratelimiter.is_none() {
-        return Ok(());
-    }
-
-    let ratelimiter = ratelimiter.unwrap();
-
-    while RUNNING.load(Ordering::Relaxed) {
-        match ratelimiter.try_wait() {
-            Ok(_) => {
-                let _ = work_sender.send(ClientWorkItemKind::Reconnect).await;
-            }
-            Err(d) => {
-                std::thread::sleep(d);
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[derive(Clone)]

@@ -8,26 +8,24 @@
 ///
 /// The RPC-Perf cache clients track hit rate, throughput, and latency to help
 /// measure cache effectiveness and performance.
-use crate::workload::ClientRequest;
+use crate::workload::{ClientRequest, Generator};
 use crate::*;
 
-use async_channel::Receiver;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::{Seed512, Xoshiro512PlusPlus};
 use tokio::io::*;
 use tokio::runtime::Runtime;
 use tokio::time::{timeout, Duration};
 use workload::ClientWorkItemKind;
 
-use std::io::{Error, ErrorKind, Result};
+use std::io::{ErrorKind, Result};
 use std::time::Instant;
 
 mod memcache;
 mod momento;
 mod redis;
 
-pub fn launch(
-    config: &Config,
-    work_receiver: Receiver<ClientWorkItemKind<ClientRequest>>,
-) -> Option<Runtime> {
+pub fn launch(config: &Config, generator: Generator) -> Option<Runtime> {
     if config.client().is_none() {
         debug!("No client configuration specified");
         return None;
@@ -44,34 +42,49 @@ pub fn launch(
         .build()
         .expect("failed to initialize tokio runtime");
 
+    // Initialize a master RNG to generate unique seeds for each task
+    let mut rng = Xoshiro512PlusPlus::from_seed(config.general().initial_seed());
+
     match config.general().protocol() {
-        Protocol::Memcache => memcache::launch_tasks(&mut client_rt, config.clone(), work_receiver),
-        Protocol::Momento => momento::launch_tasks(&mut client_rt, config.clone(), work_receiver),
+        Protocol::Memcache => {
+            memcache::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng)
+        }
+        Protocol::Momento => {
+            momento::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng)
+        }
         Protocol::MomentoProtosocket => {
-            momento::protosocket::launch_tasks(&mut client_rt, config.clone(), work_receiver)
+            momento::protosocket::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng)
         }
         Protocol::MomentoHttp => {
-            momento::http::launch_tasks(&mut client_rt, config.clone(), work_receiver)
+            momento::http::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng)
         }
         Protocol::Ping => {
-            crate::clients::ping::ascii::launch_tasks(&mut client_rt, config.clone(), work_receiver)
+            crate::clients::ping::ascii::launch_tasks(
+                &mut client_rt,
+                config.clone(),
+                generator,
+                &mut rng,
+            )
         }
         Protocol::PingGrpc => crate::clients::ping::grpc::tonic::launch_tasks(
             &mut client_rt,
             config.clone(),
-            work_receiver,
+            generator,
+            &mut rng,
         ),
         Protocol::PingGrpcH2 => crate::clients::ping::grpc::h2::launch_tasks(
             &mut client_rt,
             config.clone(),
-            work_receiver,
+            generator,
+            &mut rng,
         ),
         Protocol::PingGrpcH3 => crate::clients::ping::grpc::h3::launch_tasks(
             &mut client_rt,
             config.clone(),
-            work_receiver,
+            generator,
+            &mut rng,
         ),
-        Protocol::Resp => redis::launch_tasks(&mut client_rt, config.clone(), work_receiver),
+        Protocol::Resp => redis::launch_tasks(&mut client_rt, config.clone(), generator, &mut rng),
         protocol => {
             eprintln!("keyspace is not supported for the {:?} protocol", protocol);
             std::process::exit(1);
