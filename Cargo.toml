@@ -49,6 +49,7 @@ pin-project = "1.1.10"
 prost = "0.13.5"
 protocol-memcache = { git = "https://github.com/pelikan-io/pelikan" }
 protocol-ping = { git = "https://github.com/pelikan-io/pelikan" }
+protocol-resp = { git = "https://github.com/pelikan-io/pelikan" }
 quinn = "0.11.6"
 rand = "0.9.0"
 rand_distr = "0.5.1"

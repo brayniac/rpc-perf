@@ -676,6 +676,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bstr"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
+dependencies = [
+ "memchr",
+ "regex-automata",
+ "serde",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -827,7 +838,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "clocksource",
  "metriken",
@@ -848,7 +859,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "common",
  "log",
@@ -2208,7 +2219,7 @@ checksum = "30bde2b3dc3671ae49d8e2e9f044c7c005836e7a023ee57cffa25ab82764bb9e"
 [[package]]
 name = "logger"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "common",
  "config",
@@ -2724,7 +2735,7 @@ dependencies = [
 [[package]]
 name = "pelikan-net"
 version = "0.4.1"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "foreign-types-shared 0.1.1",
  "foreign-types-shared 0.3.1",
@@ -2956,7 +2967,7 @@ dependencies = [
 [[package]]
 name = "protocol-common"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "bytes",
  "common",
@@ -2968,7 +2979,7 @@ dependencies = [
 [[package]]
 name = "protocol-memcache"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "bytes",
  "clocksource",
@@ -2982,7 +2993,7 @@ dependencies = [
 [[package]]
 name = "protocol-ping"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "common",
  "config",
@@ -2990,6 +3001,21 @@ dependencies = [
  "metriken",
  "protocol-common",
  "storage-types",
+]
+
+[[package]]
+name = "protocol-resp"
+version = "0.3.2"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
+dependencies = [
+ "bstr",
+ "common",
+ "logger",
+ "memchr",
+ "metriken",
+ "nom",
+ "protocol-common",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3406,6 +3432,7 @@ dependencies = [
  "prost",
  "protocol-memcache",
  "protocol-ping",
+ "protocol-resp",
  "quinn",
  "rand 0.9.0",
  "rand_distr",
@@ -3763,7 +3790,7 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 dependencies = [
  "bytes",
  "clocksource",
@@ -4115,7 +4142,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "storage-types"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/pelikan-io/pelikan#337dede45d43f8f511fc4526ec8a8dd8d0dec534"
 
 [[package]]
 name = "stringprep"

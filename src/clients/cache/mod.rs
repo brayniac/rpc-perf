@@ -23,6 +23,7 @@ use std::time::Instant;
 mod memcache;
 mod momento;
 mod redis;
+mod resp_lite;
 
 pub fn launch(
     config: &Config,
@@ -72,6 +73,7 @@ pub fn launch(
             work_receiver,
         ),
         Protocol::Resp => redis::launch_tasks(&mut client_rt, config.clone(), work_receiver),
+        Protocol::RespLite => resp_lite::launch_tasks(&mut client_rt, config.clone(), work_receiver),
         protocol => {
             eprintln!("keyspace is not supported for the {:?} protocol", protocol);
             std::process::exit(1);

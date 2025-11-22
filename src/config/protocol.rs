@@ -14,5 +14,6 @@ pub enum Protocol {
     PingGrpcH2,
     PingGrpcH3,
     Resp,
+    RespLite,
     S3,
 }
